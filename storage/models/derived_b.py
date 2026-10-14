@@ -1,6 +1,7 @@
 """Component B: Sentiment, Emotion & Stance derived intelligence models."""
 
 from datetime import datetime
+from typing import Any
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     String,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from storage.database import Base
 
@@ -40,6 +42,11 @@ class SentimentResultB(Base):
     emotion_surprise: Mapped[float | None] = mapped_column(Float, default=0.0)
     emotion_neutral: Mapped[float | None] = mapped_column(Float, default=0.0)
     emotion_fear: Mapped[float | None] = mapped_column(Float, default=0.0)
+
+    # Extended fine-grained emotions (GoEmotions)
+    emotion_anxiety: Mapped[float | None] = mapped_column(Float, default=0.0)
+    emotion_excitement: Mapped[float | None] = mapped_column(Float, default=0.0)
+    emotion_extended: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Stance: 'supportive', 'against', 'neutral', 'unclear' (0.60 threshold)
     stance: Mapped[str | None] = mapped_column(String(32), default="neutral")

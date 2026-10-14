@@ -73,9 +73,9 @@ GOEMOTIONS_TO_EKMAN: dict[str, str] = {
 
 @dataclass(frozen=True)
 class EmotionResult:
-    """Immutable result from the Ekman emotion classifier."""
+    """Immutable result from the Ekman emotion classifier with fine-grained GoEmotions retention."""
 
-    dominant_emotion: str     # One of: joy, anger, sadness, disgust, surprise, fear, neutral
+    dominant_emotion: str     # Highest aggregated Ekman bucket or top GoEmotions label
     emotion_confidence: float # Max aggregated probability of the dominant Ekman bucket (0.0–1.0)
     emotion_joy: float
     emotion_anger: float
@@ -84,6 +84,10 @@ class EmotionResult:
     emotion_surprise: float
     emotion_fear: float
     emotion_neutral: float
+    # Extended fine-grained emotions cited in project brief & RAG queries
+    emotion_anxiety: float = 0.0     # GoEmotions 'nervousness' probability
+    emotion_excitement: float = 0.0  # GoEmotions 'excitement' probability
+    emotion_extended: dict[str, float] = None  # Full 28-label GoEmotions probabilities
 
 
 class EmotionClassifier:
@@ -213,6 +217,9 @@ class EmotionClassifier:
             emotion_surprise=round(ekman["surprise"], 4),
             emotion_fear=round(ekman["fear"], 4),
             emotion_neutral=round(ekman["neutral"], 4),
+            emotion_anxiety=round(label_probs.get("nervousness", 0.0), 4),
+            emotion_excitement=round(label_probs.get("excitement", 0.0), 4),
+            emotion_extended=label_probs,
         )
 
     @torch.inference_mode()
@@ -243,6 +250,9 @@ class EmotionClassifier:
                     emotion_surprise=0.0,
                     emotion_fear=0.0,
                     emotion_neutral=1.0,
+                    emotion_anxiety=0.0,
+                    emotion_excitement=0.0,
+                    emotion_extended={"neutral": 1.0},
                 )
             else:
                 valid_indices.append(i)
@@ -278,6 +288,9 @@ class EmotionClassifier:
                     emotion_surprise=round(ekman["surprise"], 4),
                     emotion_fear=round(ekman["fear"], 4),
                     emotion_neutral=round(ekman["neutral"], 4),
+                    emotion_anxiety=round(label_probs.get("nervousness", 0.0), 4),
+                    emotion_excitement=round(label_probs.get("excitement", 0.0), 4),
+                    emotion_extended=label_probs,
                 )
 
         return results  # type: ignore[return-value]

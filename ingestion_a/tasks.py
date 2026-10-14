@@ -54,6 +54,14 @@ app.conf.update(
         "ingestion_a.tasks.poll_all_channels": {"queue": "ingestion"},
         "ingestion_a.tasks.poll_single_channel": {"queue": "ingestion"},
     },
+    beat_schedule={
+        # 20-minute cycle: 30 channels * ~33.5s (30s delay + 2-5s jitter) = ~16.8 min,
+        # leaving a 3.2-minute safety buffer before the next cycle to prevent backlog queueing.
+        "poll-telegram-channels-every-20-min": {
+            "task": "ingestion_a.tasks.poll_all_channels",
+            "schedule": 1200.0,
+        },
+    },
 )
 
 

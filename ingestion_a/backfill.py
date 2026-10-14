@@ -183,47 +183,56 @@ SEED_AUTHOR_IDS = [
 
 
 def _reset_timestamps_to_recent(session, hours_window: int = 72) -> int:
-    """Reset all existing raw_posts.posted_at to recent UTC timestamps.
+    """Shift all existing raw_posts.posted_at to recent UTC timestamps.
 
-    Distributes posts uniformly across the last `hours_window` hours so
-    they appear as freshly ingested data for downstream components.
+    Applies a single constant time offset to all posts so that the most
+    recent post aligns near `now - 30 minutes`. This strictly preserves all relative
+    inter-message intervals, burstiness, velocity curves, and CIB synchrony signals.
 
     Returns:
         Number of posts updated.
     """
-    # Get all existing posts ordered by original posted_at
+    # Get all existing posts with their original posted_at timestamps
     result = session.execute(
-        text("SELECT id FROM raw_posts ORDER BY posted_at ASC")
+        text("SELECT id, posted_at FROM raw_posts ORDER BY posted_at ASC")
     )
-    post_ids = [row[0] for row in result.fetchall()]
+    rows = result.fetchall()
 
-    if not post_ids:
+    if not rows:
         logger.info("No existing posts to reset.")
         return 0
 
     now = datetime.now(timezone.utc)
-    total = len(post_ids)
-    interval = timedelta(hours=hours_window) / total
+    max_posted_at = max(row[1] for row in rows)
+    if max_posted_at.tzinfo is None:
+        max_posted_at = max_posted_at.replace(tzinfo=timezone.utc)
 
-    for idx, post_id in enumerate(post_ids):
-        new_timestamp = now - timedelta(hours=hours_window) + (interval * idx)
+    # Calculate constant shift delta aligning the newest post to 30 mins ago
+    target_newest = now - timedelta(minutes=30)
+    shift_delta = target_newest - max_posted_at
+
+    for post_id, original_ts in rows:
+        if original_ts.tzinfo is None:
+            original_ts = original_ts.replace(tzinfo=timezone.utc)
+        new_timestamp = original_ts + shift_delta
         session.execute(
             update(RawPost)
             .where(RawPost.id == post_id)
             .values(
                 posted_at=new_timestamp,
-                ingested_at=new_timestamp + timedelta(seconds=random.randint(1, 30)),
+                ingested_at=new_timestamp + timedelta(seconds=random.randint(2, 20)),
                 processing_status="pending",  # Reset to pending for re-processing
             )
         )
 
     session.commit()
     logger.info(
-        "Reset %d posts to recent timestamps (last %d hours).",
-        total,
-        hours_window,
+        "Shifted %d posts by constant delta %s (newest aligned to %s), preserving relative timing.",
+        len(rows),
+        shift_delta,
+        target_newest,
     )
-    return total
+    return len(rows)
 
 
 def _generate_synthetic_posts(
