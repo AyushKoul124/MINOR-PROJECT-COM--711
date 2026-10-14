@@ -1,0 +1,161 @@
+# ==============================================================================
+# SOCMINT Target Entity Channel Registry — 30 Curated Public Channels
+# Domain: Indian Space Policy, Defense Tech, Strategic Affairs & Science Policy
+# Seeds PostgreSQL 'monitored_channels' table on application initialization
+# ==============================================================================
+
+channels:
+  # --- GROUP 1: ISRO & Space Policy (Primary Monitored Domain) ---
+  - identifier: "@isro_updates"
+    display_name: "ISRO Official News & Launch Updates"
+    topic_tags: ["space", "ISRO", "satellite", "technology"]
+    notes: "Primary public broadcast channel for space mission announcements"
+
+  - identifier: "@indianspace_discussion"
+    display_name: "Indian Space Discussion Group"
+    topic_tags: ["space", "ISRO", "chandrayaan", "gaganyaan"]
+    notes: "Public discussion thread for mission commentary and community reactions"
+
+  - identifier: "@isrospaceupdates"
+    display_name: "ISRO Space Missions & Payload Tracker"
+    topic_tags: ["space", "payload", "launch_vehicle", "PSLV"]
+    notes: "Mission telemetry and technical tracking"
+
+  - identifier: "@indianspaceresearch"
+    display_name: "Indian Space Research Community"
+    topic_tags: ["space", "astronomy", "research", "IN-SPACe"]
+    notes: "Commercial space sector and private aerospace startups"
+
+  - identifier: "@gaganyaan_mission"
+    display_name: "Gaganyaan Human Spaceflight Forum"
+    topic_tags: ["space", "gaganyaan", "astronauts", "human_spaceflight"]
+    notes: "Focused public discourse on human spaceflight milestones"
+
+  - identifier: "@space_india_portal"
+    display_name: "Space India Public Portal"
+    topic_tags: ["space", "education", "satellite", "policy"]
+    notes: "Student and scientific audience discourse"
+
+  # --- GROUP 2: Defense Technology & Aerospace (DRDO / Indigenous Tech) ---
+  - identifier: "@drdo_updates"
+    display_name: "DRDO Technology Bulletin"
+    topic_tags: ["defense", "DRDO", "indigenous", "missiles"]
+    notes: "Official updates on defense R&D and indigenous trials"
+
+  - identifier: "@indiandefenceupdate"
+    display_name: "Indian Defence News & Modernization"
+    topic_tags: ["defense", "military", "modernization", "security"]
+    notes: "Broadcasts on defense procurement and strategic capability"
+
+  - identifier: "@defencenewsindia"
+    display_name: "Defence Updates India"
+    topic_tags: ["defense", "army", "navy", "airforce"]
+    notes: "General defense developments and capability tests"
+
+  - identifier: "@aerospace_defence_india"
+    display_name: "Aerospace & Defense India"
+    topic_tags: ["aerospace", "aviation", "Tejas", "AMCA"]
+    notes: "Fighter aircraft, drone tech, and aeronautical engineering"
+
+  - identifier: "@idrw_org"
+    display_name: "Indian Defence Research Wing (IDRW)"
+    topic_tags: ["defense", "military_analysis", "research", "procurement"]
+    notes: "High-volume defense commentary and news aggregation"
+
+  - identifier: "@bharat_defence"
+    display_name: "Bharat Defence Forum"
+    topic_tags: ["defense", "atmanirbhar", "security", "geopolitics"]
+    notes: "Indigenous manufacturing and defense industry discourse"
+
+  # --- GROUP 3: Strategic Affairs & National Security ---
+  - identifier: "@strategic_affairs_in"
+    display_name: "Indian Strategic Affairs & Security"
+    topic_tags: ["geopolitics", "security", "strategy", "foreign_policy"]
+    notes: "Think-tank and academic discussions on national interest"
+
+  - identifier: "@geopolitics_india"
+    display_name: "South Asia Geopolitics Desk"
+    topic_tags: ["geopolitics", "border", "maritime", "diplomacy"]
+    notes: "Regional strategic balance and maritime security"
+
+  - identifier: "@indiadiplomacy"
+    display_name: "India Diplomacy & External Affairs"
+    topic_tags: ["diplomacy", "MEA", "bilateral", "global_affairs"]
+    notes: "International agreements and tech-transfer diplomacy"
+
+  - identifier: "@southasiandefence"
+    display_name: "South Asian Defence Analysis"
+    topic_tags: ["geopolitics", "defense", "regional_security"]
+    notes: "Cross-border defense developments and multi-country commentary"
+
+  - identifier: "@stratfront"
+    display_name: "Strategic Frontier Watch"
+    topic_tags: ["national_security", "cyber", "space_defense", "tactics"]
+    notes: "Emerging domain warfare (cyber, electronic, space security)"
+
+  - identifier: "@indiastrategic"
+    display_name: "India Strategic Review"
+    topic_tags: ["policy", "defense", "military", "aerospace"]
+    notes: "Defense publication analysis and policy commentary"
+
+  # --- GROUP 4: Science, Technology & Telecom Policy ---
+  - identifier: "@csir_india"
+    display_name: "CSIR Science & Innovation Bulletin"
+    topic_tags: ["science", "innovation", "CSIR", "laboratories"]
+    notes: "National laboratories and scientific patent updates"
+
+  - identifier: "@indiatechpolicy"
+    display_name: "India Tech Policy & Semiconductor Desk"
+    topic_tags: ["technology", "semiconductor", "AI_policy", "telecom"]
+    notes: "National semiconductor mission and emerging tech policy"
+
+  - identifier: "@vigyanprasar"
+    display_name: "Vigyan Prasar Science Communications"
+    topic_tags: ["science", "popular_science", "stem", "education"]
+    notes: "Public communication on Indian scientific breakthroughs"
+
+  - identifier: "@digital_india_news"
+    display_name: "Digital India Technology Tracker"
+    topic_tags: ["technology", "telecom", "5G", "digital_governance"]
+    notes: "Digital infrastructure and critical communication networks"
+
+  - identifier: "@meity_updates"
+    display_name: "MeitY Technology & Cyber Bulletin"
+    topic_tags: ["cybersecurity", "MeitY", "DPDP", "CERT-In"]
+    notes: "Regulatory notifications and cybersecurity advisories"
+
+  - identifier: "@quantum_mission_india"
+    display_name: "National Quantum Mission Updates"
+    topic_tags: ["technology", "quantum", "computing", "R&D"]
+    notes: "Advanced computing and quantum communication research"
+
+  # --- GROUP 5: Regional Aerospace & Discussion Threads ---
+  - identifier: "@frontierindia"
+    display_name: "Frontier India Technology & Defense"
+    topic_tags: ["defense", "space", "nuclear", "maritime"]
+    notes: "Technical analysis on defense manufacturing"
+
+  - identifier: "@defence_forum_india"
+    display_name: "Defence Forum India Discussion"
+    topic_tags: ["defense", "forum", "community", "discourse"]
+    notes: "High-activity community chatter for CIB and demographic sampling"
+
+  - identifier: "@indiannavy_updates"
+    display_name: "Indian Maritime & Naval Tech"
+    topic_tags: ["navy", "maritime", "indigenous_ships", "defense"]
+    notes: "Naval shipbuilding, maritime surveillance, and carrier tech"
+
+  - identifier: "@iaf_updates_hub"
+    display_name: "Indian Air Force Aviation Hub"
+    topic_tags: ["airforce", "aviation", "fighters", "defense"]
+    notes: "Air defense, radar installations, and aerospace tests"
+
+  - identifier: "@criticaltech_india"
+    display_name: "Critical Technologies Watch"
+    topic_tags: ["technology", "space", "defense", "critical_minerals"]
+    notes: "Supply chains for rare earths and aerospace grade titanium"
+
+  - identifier: "@space_defence_hub"
+    display_name: "Space & Defense Intelligence Hub"
+    topic_tags: ["space", "defense", "satellites", "military_space"]
+    notes: "Defense Space Agency (DSA) and military satellite payloads"

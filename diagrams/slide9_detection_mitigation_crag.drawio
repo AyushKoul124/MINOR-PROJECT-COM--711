@@ -1,0 +1,66 @@
+<mxfile host="app.diagrams.net" modified="2026-09-17T00:00:00.000Z" agent="Antigravity" version="21.0.0" type="device">
+  <diagram id="Slide9_3Layer_Architecture" name="Slide 9 - 3-Layer Mitigation Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="820" background="#0F172A" math="0" shadow="1">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- User Query -->
+        <mxCell id="uq" value="&lt;b style='color:#FFFFFF;font-size:14px;letter-spacing:0.5px;'&gt;User Query&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E293B;strokeColor=#38BDF8;strokeWidth=2;arcSize=8;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="280" y="35" width="200" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- Retriever -->
+        <mxCell id="ret" value="&lt;b style='color:#FFFFFF;font-size:14px;letter-spacing:0.5px;'&gt;Retriever&lt;/b&gt;&lt;br/&gt;&lt;span style='color:#94A3B8;font-size:11px;'&gt;(Top-K Context Chunks)&lt;/span&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E293B;strokeColor=#38BDF8;strokeWidth=2;arcSize=8;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="520" y="35" width="200" height="46" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow UQ -> RET -->
+        <mxCell id="e_uq_ret" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#38BDF8;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="uq" target="ret">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- LAYER 1: The Gatekeeper (CRAG) -->
+        <mxCell id="l1" value="&lt;div style='text-align:left;padding:6px 12px;'&gt;&#10;  &lt;div style='color:#F59E0B;font-size:14px;font-weight:bold;margin-bottom:6px;'&gt;LAYER 1: The Gatekeeper (CRAG — Pre-Generation)&lt;/div&gt;&#10;  &lt;div style='color:#E2E8F0;font-size:13px;margin-bottom:6px;'&gt;Evaluates: &lt;i style='color:#FDE68A;'&gt;&amp;quot;Are the retrieved documents actually relevant?&amp;quot;&lt;/i&gt;&lt;/div&gt;&#10;  &lt;div style='color:#A7F3D0;font-size:12px;margin-left:10px;'&gt;• &lt;b&gt;If YES ──▶&lt;/b&gt; Proceed to generation&lt;/div&gt;&#10;  &lt;div style='color:#FCA5A5;font-size:12px;margin-left:10px;margin-top:2px;'&gt;• &lt;b&gt;If NO &amp;nbsp;──▶&lt;/b&gt; Query Rewrite + Re-retrieve (or Web Search)&lt;/div&gt;&#10;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E293B;strokeColor=#F59E0B;strokeWidth=2.5;arcSize=6;shadow=1;align=left;valign=middle;" vertex="1" parent="1">
+          <mxGeometry x="160" y="120" width="680" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow RET -> L1 -->
+        <mxCell id="e_ret_l1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#F59E0B;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="ret" target="l1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- LAYER 2: The Live Fact-Checker (Self-RAG) -->
+        <mxCell id="l2" value="&lt;div style='text-align:left;padding:6px 12px;'&gt;&#10;  &lt;div style='color:#C084FC;font-size:14px;font-weight:bold;margin-bottom:6px;'&gt;LAYER 2: The Live Fact-Checker (Self-RAG — During Generation)&lt;/div&gt;&#10;  &lt;div style='color:#E2E8F0;font-size:13px;margin-bottom:4px;'&gt;LLM writes sentence by sentence with internal critique:&lt;/div&gt;&#10;  &lt;div style='color:#DDD6FE;font-size:12px;margin-left:8px;margin-bottom:3px;'&gt;• Is claim supported by context?&lt;/div&gt;&#10;  &lt;div style='color:#A7F3D0;font-size:12px;margin-left:24px;'&gt;- &lt;b&gt;YES ──▶ KEEP&lt;/b&gt;&lt;/div&gt;&#10;  &lt;div style='color:#FCA5A5;font-size:12px;margin-left:24px;margin-top:2px;'&gt;- &lt;b&gt;NO &amp;nbsp;──▶ DISCARD &amp;amp; REGENERATE&lt;/b&gt;&lt;/div&gt;&#10;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E293B;strokeColor=#A855F7;strokeWidth=2.5;arcSize=6;shadow=1;align=left;valign=middle;" vertex="1" parent="1">
+          <mxGeometry x="160" y="270" width="680" height="125" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow L1 -> L2 -->
+        <mxCell id="e_l1_l2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#A855F7;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="l1" target="l2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- LAYER 3: The Quality Auditor (RAGAS) -->
+        <mxCell id="l3" value="&lt;div style='text-align:left;padding:6px 12px;'&gt;&#10;  &lt;div style='color:#38BDF8;font-size:14px;font-weight:bold;margin-bottom:5px;'&gt;LAYER 3: The Quality Auditor (RAGAS — Post-Generation)&lt;/div&gt;&#10;  &lt;div style='color:#E2E8F0;font-size:13px;margin-bottom:4px;'&gt;Calculates mathematical Faithfulness Score:&lt;/div&gt;&#10;  &lt;div style='color:#BAE6FD;font-size:12px;margin-left:14px;font-family:monospace;margin-bottom:6px;'&gt;&lt;b&gt;Score = Number of Supported Claims / Total Generated Claims&lt;/b&gt;&lt;/div&gt;&#10;  &lt;div style='color:#A7F3D0;font-size:12px;margin-left:10px;'&gt;• &lt;b&gt;Score &amp;gt; 0.85 ──▶ DELIVER TO USER&lt;/b&gt;&lt;/div&gt;&#10;  &lt;div style='color:#FCA5A5;font-size:12px;margin-left:10px;margin-top:2px;'&gt;• &lt;b&gt;Score &amp;lt; 0.85 ──▶ FLAG / REJECT&lt;/b&gt;&lt;/div&gt;&#10;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1E293B;strokeColor=#38BDF8;strokeWidth=2.5;arcSize=6;shadow=1;align=left;valign=middle;" vertex="1" parent="1">
+          <mxGeometry x="160" y="435" width="680" height="135" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow L2 -> L3 -->
+        <mxCell id="e_l2_l3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#38BDF8;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="l2" target="l3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Grounded Answer + Citations -->
+        <mxCell id="out" value="&lt;b style='color:#FFFFFF;font-size:14px;letter-spacing:1px;'&gt;GROUNDED ANSWER + CITATIONS&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#064E3B;strokeColor=#10B981;strokeWidth=2.5;arcSize=8;shadow=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="610" width="460" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- Arrow L3 -> OUT -->
+        <mxCell id="e_l3_out" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#10B981;strokeWidth=2;endArrow=block;endFill=1;" edge="1" parent="1" source="l3" target="out">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
