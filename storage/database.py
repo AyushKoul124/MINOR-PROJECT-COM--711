@@ -20,8 +20,8 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 load_dotenv()
 
-DEFAULT_ASYNC_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/socmint"
-DEFAULT_SYNC_URL = "postgresql://postgres:postgres@localhost:5432/socmint"
+DEFAULT_ASYNC_URL = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/socmint"
+DEFAULT_SYNC_URL = "postgresql://postgres:postgres@127.0.0.1:5432/socmint"
 
 DATABASE_URL = os.getenv("DATABASE_URL", DEFAULT_ASYNC_URL)
 DATABASE_SYNC_URL = os.getenv("DATABASE_SYNC_URL", DEFAULT_SYNC_URL)
