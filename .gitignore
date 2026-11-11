@@ -35,6 +35,10 @@ env/
 *.session
 *.session-journal
 *.session.lock
+.telegram_login.json
+.telegram_code.txt
+.telegram_wait.txt
+.telegram_password.txt
 
 # PyTorch & HuggingFace Caches
 .cache/
@@ -51,6 +55,8 @@ redis_data/
 node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/.env
+frontend/.env.local
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -68,3 +74,6 @@ benchmarks/cib_ioa/*.csv
 
 # External / Unrelated projects
 Coursera-Bypass/
+
+# Local Telegram Desktop exports (large HTML dumps — not part of the repo)
+Telegram Desktop/

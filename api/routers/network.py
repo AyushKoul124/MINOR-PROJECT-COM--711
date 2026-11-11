@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.schemas.models import (
@@ -15,6 +15,7 @@ from api.schemas.models import (
 )
 from storage.database import SyncSessionLocal
 from storage.models.derived_e import NetworkEdgeE, NetworkNodeE
+from storage.models.raw import RawAuthor
 
 router = APIRouter(prefix="/network", tags=["Network Analytics & CIB Screening"])
 
@@ -37,12 +38,19 @@ def get_network_graph(
     cutoff = now - timedelta(hours=window_hours)
 
     # 1. Query nodes (capped at 500 by betweenness)
+    latest_node_at = db.execute(
+        select(func.max(NetworkNodeE.analyzed_at)).where(NetworkNodeE.window_start >= cutoff)
+    ).scalar()
     node_stmt = (
         select(NetworkNodeE)
         .where(NetworkNodeE.window_start >= cutoff)
         .order_by(NetworkNodeE.betweenness_centrality.desc())
         .limit(500)
     )
+    if latest_node_at is not None:
+        node_stmt = node_stmt.where(
+            NetworkNodeE.analyzed_at >= latest_node_at - timedelta(minutes=2)
+        )
     nodes = db.execute(node_stmt).scalars().all()
 
     if not nodes:
@@ -55,6 +63,10 @@ def get_network_graph(
         nodes = db.execute(node_stmt).scalars().all()
 
     node_ids = {n.entity_id for n in nodes}
+    author_rows = db.execute(
+        select(RawAuthor.platform_author_id, RawAuthor.display_name)
+    ).all()
+    display_names = {pid: name.strip() for pid, name in author_rows if name and name.strip()}
     node_items: list[NetworkNodeItem] = []
     cib_flagged_count = 0
     communities = set()
@@ -64,10 +76,14 @@ def get_network_graph(
             cib_flagged_count += 1
         communities.add(n.community_id or 0)
 
+        label = n.label
+        if (n.entity_type or "") == "author":
+            label = display_names.get(n.entity_id) or n.entity_id
+
         node_items.append(
             NetworkNodeItem(
                 id=n.entity_id,
-                label=n.label,
+                label=label,
                 entity_type=n.entity_type,
                 community_id=n.community_id or 0,
                 betweenness=round(n.betweenness_centrality or 0.0, 4),
@@ -79,6 +95,8 @@ def get_network_graph(
 
     # 2. Query strictly induced edges
     edge_stmt = select(NetworkEdgeE).order_by(NetworkEdgeE.weight.desc()).limit(1000)
+    if nodes:
+        edge_stmt = edge_stmt.where(NetworkEdgeE.window_end == nodes[0].window_end)
     edges = db.execute(edge_stmt).scalars().all()
 
     link_items: list[NetworkLinkItem] = []

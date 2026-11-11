@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Component C — Audience</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 18mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", Calibri, sans-serif;
+  color: #1a1a1a;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+header.banner {
+  background: #1f4fff;
+  color: white;
+  padding: 14px 18px 12px;
+  margin: -2px 0 16px;
+}
+header.banner .kicker {
+  margin: 0;
+  font-size: 9pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+header.banner h1 {
+  margin: 4px 0 0;
+  font-size: 22pt;
+  line-height: 1.05;
+  font-weight: 700;
+}
+header.banner p { margin: 6px 0 0; font-size: 10.5pt; }
+h2 {
+  font-size: 13pt;
+  margin: 18px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #1f4fff;
+}
+h3 { font-size: 11.5pt; margin: 12px 0 4px; }
+p { margin: 6px 0; }
+ul, ol { margin: 6px 0 8px; padding-left: 18px; }
+li { margin: 2px 0; }
+.note, .warn, .say {
+  border: 1px solid #d9d9d9;
+  padding: 8px 12px;
+  margin: 10px 0;
+  background: #f7f8fb;
+}
+.warn { border-left: 4px solid #c2410c; background: #fff8f3; }
+.say { border-left: 4px solid #1f4fff; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 10pt; }
+th, td { border: 1px solid #d0d0d0; padding: 5px 7px; vertical-align: top; text-align: left; }
+th { background: #eef2ff; font-weight: 650; }
+code { font-family: Consolas, monospace; font-size: 9.5pt; background: #f3f4f6; padding: 0 3px; }
+.figure { margin: 10px 0 14px; page-break-inside: avoid; }
+.figure svg { width: 100%; height: auto; }
+.caption { font-size: 9pt; color: #444; margin-top: 3px; }
+footer {
+  margin-top: 18px;
+  font-size: 8.5pt;
+  color: #555;
+  border-top: 1px solid #ddd;
+  padding-top: 6px;
+}
+</style></head><body>
+<header class="banner">
+  <p class="kicker">Second review · academic prototype · not an operational system</p>
+  <h1>Component C — Audience</h1>
+  <p>How the prototype describes a group of accounts without profiling a person.</p>
+</header>
+
+<div class="note">This brief is for the teammate who presents audience. The output is a coarse guess from public text and posting time. It is not a census.</div>
+<h2>1. What this agent does</h2>
+<p>Component C summarises who appears to be talking in a time window: rough age bands, rough region, language, interests, and when posts arrive in India Standard Time. It works on groups. It does not open a page for one named person and assign them an age.</p>
+<h2>2. Where it sits</h2>
+<div class="figure">
+<svg viewBox="0 0 720 168" xmlns="http://www.w3.org/2000/svg" role="img">
+  <rect x="8" y="18" width="110" height="52" fill="#1f4fff"/>
+  <text x="63" y="48" text-anchor="middle" fill="white" font-size="13" font-family="Segoe UI">A Ingestion</text>
+  <rect x="150" y="18" width="130" height="52" fill="#111"/>
+  <text x="215" y="42" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">PostgreSQL</text>
+  <text x="215" y="58" text-anchor="middle" fill="#d6ff3f" font-size="10" font-family="Segoe UI">raw posts</text>
+  <rect x="312" y="8" width="120" height="36" fill="#eef2ff" stroke="#1f4fff"/>
+  <text x="372" y="31" text-anchor="middle" font-size="12" font-family="Segoe UI">B per post</text>
+  <rect x="312" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="372" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">C window</text>
+  <rect x="448" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="508" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">D window</text>
+  <rect x="584" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="644" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">E window</text>
+  <rect x="400" y="108" width="200" height="40" fill="#111"/>
+  <text x="500" y="133" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">Ask: search, then one answer</text>
+  <path d="M118 44 H150" stroke="#111" stroke-width="1.5"/>
+  <path d="M280 44 H312" stroke="#111" stroke-width="1.5"/>
+  <path d="M372 88 V108" stroke="#111" stroke-width="1.2"/>
+</svg>
+<p class="caption">Figure 1. Posts land in Postgres. B reads one post at a time. C, D, and E recompute a time window. Ask searches the short summaries those agents write.</p>
+</div>
+<p>C runs on a window, usually 48 hours of <code>posted_at</code>. It recomputes that window. It does not update one account in place all day.</p>
+<h2>3. Two layers</h2>
+<table>
+<tr><th>Layer</th><th>What is visible</th><th>What we infer</th></tr>
+<tr><td>Broadcast</td><td>Channel name, topic tags, hours when posts appear</td><td>A coarse interest and a daily rhythm</td></tr>
+<tr><td>Discussion</td><td>Public display name and bio text of people who spoke in a linked discussion</td><td>Keyword hints for age band, region, and interest</td></tr>
+</table>
+<p>Telegram does not give us a subscriber list. Anyone who never speaks is invisible. Say that before a reviewer treats the chart as the whole audience.</p>
+<h2>4. The privacy line</h2>
+<p>The locked rule is k-anonymity with k at least 50. A group smaller than 50 accounts is marked <code>below_threshold</code>. The production guard uses 50. A demo run can use 15 so a small seed still produces a card. The card must be described as below the research threshold, not as a reliable demographic.</p>
+<div class="warn">The current Audience page can show a small group because a demo run saved one. In the review, say the guard exists and the number on screen is below 50, so it is illustrative, not a finding about a population.</div>
+<h2>5. What is written</h2>
+<table>
+<tr><th>Field</th><th>Meaning</th></tr>
+<tr><td><code>account_count</code></td><td>How many accounts were in the group.</td></tr>
+<tr><td>Age, geography, language, interest</td><td>Shares that sum as distributions, not a label on one user.</td></tr>
+<tr><td><code>below_threshold</code></td><td>True when the group is too small.</td></tr>
+<tr><td><code>analyzed_at</code></td><td>When this snapshot was computed. Each run inserts a new snapshot.</td></tr>
+</table>
+<p>The API keeps the newest snapshot for each group label, so the page does not stack three copies of the same run.</p>
+<h2>6. What to show</h2>
+<p>Open <strong>Audience</strong>. Explain the clock first: morning, afternoon, evening in IST, computed from <code>posted_at</code>. Then the group card. If the count is under 50, say so out loud.</p>
+<div class="say"><strong>One sentence.</strong> “This is a keyword sketch of public speakers in the window. It is not an identity record.”</div>
+<h2>7. Related parts</h2>
+<table>
+<tr><th>Part</th><th>Relation to C</th></tr>
+<tr><td>Table</td><td><code>demographic_aggregates_c</code></td></tr>
+<tr><td>API</td><td><code>GET /api/demographics</code></td></tr>
+<tr><td>Ask</td><td>Can quote the group summary. It should not invent a person’s age.</td></tr>
+<tr><td>After the exam</td><td><code>scripts/post_viva_scrub.sql</code> clears bios and display names.</td></tr>
+</table>
+<h2>8. Done, and not done</h2>
+<table>
+<tr><th>Done</th><th>Not claimed</th></tr>
+<tr><td>Heuristic distributions, threshold flag, Audience page, IST rhythm.</td><td>No individual dossier. No claim that the age bands were validated against a census.</td></tr>
+</table>
+<h2>9. Likely questions</h2>
+<table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>How do you know someone is 25 to 34?</td><td>We do not know. A keyword in a public bio can place the account in a band. Many bios say nothing, so the band is a weak prior.</td></tr>
+<tr><td>Why show a group of 8?</td><td>The demo threshold is lower so the screen is not empty. The research line remains 50. Eight is below it.</td></tr>
+<tr><td>Why three identical cards before?</td><td>Each analysis run saved another copy. The page now keeps the latest copy of each label.</td></tr>
+</table>
+
+<footer>AI-Driven Social Media Audience Intelligence Framework · 7th semester CSE minor project · Public Telegram only · Figures describe the implemented design.</footer>
+</body></html>

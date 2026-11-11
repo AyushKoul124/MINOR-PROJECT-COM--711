@@ -98,3 +98,15 @@ $$\text{Polling Cadence} = \frac{900 \text{ seconds (15-minute window)}}{30 \tex
 * [CURSOR_BRIEF.md](CURSOR_BRIEF.md) ([PDF](CURSOR_BRIEF.pdf)) — AI prompting & engineering reference.
 * [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) ([PDF](IMPLEMENTATION_PLAN.pdf)) — 15-week implementation roadmap.
 * [.cursorrules](.cursorrules) — Cursor IDE automated rule enforcement.
+
+---
+
+## 5. Post-Viva PII Scrub & API Auth
+
+After the viva defense, wipe personal text from the development database:
+
+```bash
+psql -U socmint -d socmint -f scripts/post_viva_scrub.sql
+```
+
+Optional HTTP Basic Auth for lab demos: set `API_BASIC_AUTH_USERNAME` and `API_BASIC_AUTH_PASSWORD` in `.env` (see `.env.example`). Leave the password empty for passwordless local development.

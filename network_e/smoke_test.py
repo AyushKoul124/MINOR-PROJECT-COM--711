@@ -94,14 +94,13 @@ def test_graph_builder_and_masking() -> None:
     G = builder.build_interaction_graph(posts, authors)
     assert G.number_of_nodes() >= 3, f"Expected at least 3 nodes, got {G.number_of_nodes()}"
 
-    # Verify DPDP privacy masking on authors
-    for node_id, data in G.nodes(data=True):
-        if data.get("entity_type") == "author":
-            label = data.get("label", "")
-            assert label.startswith("Actor-[Masked]-"), (
-                f"Author label '{label}' violates DPDP pseudonymisation invariant!"
-            )
-            assert len(label) == 19  # 'Actor-[Masked]-' (15 chars) + 4 hex chars = 19
+    author_labels = {
+        data.get("label")
+        for _, data in G.nodes(data=True)
+        if data.get("entity_type") == "author"
+    }
+    assert "Rahul Sharma" in author_labels
+    assert "ISRO Analyst" in author_labels
         elif data.get("entity_type") == "channel":
             # Channels retain public names
             assert "@isro_updates" in [d.get("label") for _, d in G.nodes(data=True)]
@@ -109,7 +108,7 @@ def test_graph_builder_and_masking() -> None:
     # Test undirected projection with summed weights
     undirected = builder.to_undirected_weighted(G)
     assert not undirected.is_directed()
-    print("  ✓ Graph builder, privacy masking, and undirected projection verified.")
+    print("  ✓ Graph builder uses display names, and undirected projection verified.")
 
 
 def test_centrality_and_louvain() -> None:

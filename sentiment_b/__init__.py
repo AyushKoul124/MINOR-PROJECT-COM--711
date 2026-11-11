@@ -5,6 +5,7 @@ Sequential 3-model NLP pipeline:
     2. EmotionClassifier    — Ekman 6 + neutral emotions (GoEmotions)
     3. StanceDetector       — Zero-shot policy stance (DistilBART MNLI)
     4. SarcasmDetector      — Rule-based valence-emoji incongruity heuristic
+    5. score_reactions      — Reaction-bar heuristic (does not change valence)
 
 Orchestrated by SentimentPipeline, which enforces the 4 GB VRAM sequential
 execution invariant (load → infer → unload → empty_cache between models).
@@ -12,6 +13,7 @@ execution invariant (load → infer → unload → empty_cache between models).
 
 from sentiment_b.emotion import EmotionClassifier, EmotionResult
 from sentiment_b.pipeline import SentimentPipeline
+from sentiment_b.reactions import ReactionScore, score_reactions
 from sentiment_b.sarcasm import SarcasmDetector
 from sentiment_b.sentiment import SentimentClassifier, SentimentResult
 from sentiment_b.stance import StanceDetector, StanceResult
@@ -25,4 +27,6 @@ __all__ = [
     "StanceDetector",
     "StanceResult",
     "SarcasmDetector",
+    "ReactionScore",
+    "score_reactions",
 ]

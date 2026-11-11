@@ -24,7 +24,7 @@ export default function TrendExplorer() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-muted)' }}>
         <Activity className="animate-spin" size={28} style={{ marginRight: '10px' }} />
-        <span>Loading BERTopic Velocity Engine...</span>
+        <span>Loading topics...</span>
       </div>
     );
   }
@@ -33,63 +33,62 @@ export default function TrendExplorer() {
   const surgingCount = data?.surging_count || 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="view-stack">
       {/* Top Telemetry Cards */}
       <div className="bento-grid">
-        <div className="bento-card" style={{ gridColumn: 'span 4' }}>
+        <div className="bento-card span-4">
           <div className="card-header">
             <span className="card-title"><TrendingUp size={16} /> Discovered Themes</span>
-            <span className="badge badge-blue">BERTopic Neural</span>
           </div>
           <div className="kpi-value">{topics.length}</div>
-          <div className="kpi-subtext">HDBSCAN Cluster Partition (min_size=3)</div>
+          <div className="kpi-subtext">Themes found in recent posts</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 4' }}>
+        <div className="bento-card span-4">
           <div className="card-header">
             <span className="card-title"><Flame size={16} /> Surging Topics</span>
-            <span className="badge badge-amber">&Delta;v/&Delta;t &gt; 0</span>
+            <span className="badge badge-amber">Rising</span>
           </div>
           <div className="kpi-value" style={{ color: surgingCount > 0 ? 'var(--accent-amber)' : 'var(--text-main)' }}>
             {surgingCount}
           </div>
-          <div className="kpi-subtext">Positive acceleration in second 24h half</div>
+          <div className="kpi-subtext">Moving faster than earlier in the window</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 4' }}>
+        <div className="bento-card span-4">
           <div className="card-header">
-            <span className="card-title"><Zap size={16} /> Max Hourly Velocity</span>
+            <span className="card-title"><Zap size={16} /> Fastest topic</span>
             <span className="badge badge-emerald">posts/hr</span>
           </div>
           <div className="kpi-value">
             {topics.length > 0 ? topics[0].velocity.toFixed(3) : '0.000'}
           </div>
-          <div className="kpi-subtext">Peak publication frequency in window</div>
+          <div className="kpi-subtext">Most posts per hour</div>
         </div>
       </div>
 
       {/* Ranked Topic Velocity Table */}
       <div className="bento-card">
         <div className="card-header">
-          <span className="card-title">Ranked Topic Velocity & Acceleration Ledger</span>
-          <span className="badge badge-cyan">Anchored strictly on posted_at</span>
+          <span className="card-title">Topics, ranked by how fast they are moving</span>
+          <span className="badge badge-cyan">Last 48 hours</span>
         </div>
 
         {topics.length === 0 ? (
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <p style={{ margin: 0 }}>No clustered topic records currently found in the 48-hour trailing window.</p>
-            <p style={{ margin: '6px 0 0 0', fontSize: '12px' }}>Click "RUN ANALYSIS NOW" on the Overview page to generate fresh neural clusters.</p>
+            <p style={{ margin: '6px 0 0 0', fontSize: '12px' }}>Run analysis from Overview to group the recent posts.</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto', marginTop: '12px' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <table className="data-table">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
                   <th style={{ padding: '12px 14px' }}>RANK</th>
                   <th style={{ padding: '12px 14px' }}>CONVERSATIONAL THEME</th>
                   <th style={{ padding: '12px 14px' }}>POSTS</th>
-                  <th style={{ padding: '12px 14px' }}>VELOCITY (v)</th>
-                  <th style={{ padding: '12px 14px' }}>ACCELERATION (a)</th>
+                  <th style={{ padding: '12px 14px' }}>POSTS / HOUR</th>
+                  <th style={{ padding: '12px 14px' }}>CHANGE</th>
                   <th style={{ padding: '12px 14px' }}>STATUS</th>
                   <th style={{ padding: '12px 14px' }}>KEY TERMS</th>
                 </tr>

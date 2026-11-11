@@ -36,47 +36,74 @@ export default function SentimentTimeline() {
 
   const stanceMap = timeline?.stance_breakdown || {};
   const totalStance = Object.values(stanceMap).reduce((a, b) => a + b, 0) || 1;
+  const reactions = timeline?.reactions || {};
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="view-stack">
       {/* Top Telemetry Summary */}
       <div className="bento-grid">
-        <div className="bento-card" style={{ gridColumn: 'span 4' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
             <span className="card-title">Analyzed Posts</span>
             <span className="badge badge-blue">48H WINDOW</span>
           </div>
           <div className="kpi-value">{timeline?.total_posts || 0}</div>
-          <div className="kpi-subtext">Multi-dialectal English + Hinglish text</div>
+          <div className="kpi-subtext">English and Hinglish posts</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 4' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
-            <span className="card-title">Policy Stance Coverage</span>
-            <span className="badge badge-purple">DistilBART NLI</span>
+            <span className="card-title">Stance</span>
           </div>
           <div className="kpi-value">{totalStance}</div>
-          <div className="kpi-subtext">&ge; 0.60 Confidence Threshold</div>
+          <div className="kpi-subtext">Posts with a clear position</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 4' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
             <span className="card-title">Sarcasm Flags</span>
-            <span className="badge badge-amber">Emoji Incongruity</span>
+            <span className="badge badge-amber">Possible sarcasm</span>
           </div>
           <div className="kpi-value">{timeline?.sarcasm_count || 0}</div>
           <div className="kpi-subtext">Advisory uncertainty signals</div>
+        </div>
+
+        <div className="bento-card span-3">
+          <div className="card-header">
+            <span className="card-title">Reaction Bar</span>
+            <span className="badge badge-rose">{(reactions.valence || 'none').toUpperCase()}</span>
+          </div>
+          <div className="kpi-value">{reactions.posts_with_reactions || 0}</div>
+          <div className="kpi-subtext">
+            {reactions.positive || 0} positive · {reactions.negative || 0} negative · {reactions.other || 0} other
+          </div>
+        </div>
+      </div>
+
+      <div className="bento-card">
+        <div className="card-header">
+          <span className="card-title">Emoji reactions on posts</span>
+          <span className="badge badge-gray">Separate from the text reading</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
+          {(reactions.top || []).length === 0 && (
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No reactions in this window.</span>
+          )}
+          {(reactions.top || []).map((item) => (
+            <span key={item.emoji} className="badge badge-gray" style={{ fontSize: '14px', padding: '6px 10px' }}>
+              {item.emoji} {item.count}
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Policy Stance Gauges */}
       <div className="bento-card">
         <div className="card-header">
-          <span className="card-title">Zero-Shot Policy Stance Breakdown</span>
-          <span className="badge badge-emerald">4-Class Partition</span>
+          <span className="card-title">Where the posts stand</span>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginTop: '12px' }}>
+        <div className="stance-grid">
           {['supportive', 'against', 'neutral', 'unclear'].map((st) => {
             const count = stanceMap[st] || 0;
             const pct = ((count / totalStance) * 100).toFixed(1);
@@ -108,7 +135,7 @@ export default function SentimentTimeline() {
       <div className="bento-card">
         <div className="card-header">
           <span className="card-title">Chronological Sentiment & Emotion Shifts</span>
-          <span className="badge badge-cyan">Anchored on posted_at</span>
+          <span className="badge badge-cyan">By post time</span>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '12px' }}>
@@ -133,6 +160,11 @@ export default function SentimentTimeline() {
                 <span className="badge badge-emerald">+{pt.positive_count} Pos</span>
                 <span className="badge badge-rose">-{pt.negative_count} Neg</span>
                 <span className="badge badge-gray">{pt.neutral_count} Neu</span>
+                {(pt.reaction_positive > 0 || pt.reaction_negative > 0) && (
+                  <span className="badge badge-amber">
+                    Rxn +{pt.reaction_positive} / -{pt.reaction_negative}
+                  </span>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
@@ -185,11 +217,25 @@ export default function SentimentTimeline() {
                   {p.sarcasm_flag && (
                     <span className="badge badge-rose">SARCASM</span>
                   )}
+                  {p.reaction_total > 0 && (
+                    <span className={`badge ${p.reaction_valence === 'positive' ? 'badge-emerald' : p.reaction_valence === 'negative' ? 'badge-rose' : 'badge-gray'}`}>
+                      REACTION: {p.reaction_valence?.toUpperCase()}
+                    </span>
+                  )}
                 </div>
               </div>
-              <p style={{ margin: 0, fontSize: '13px', color: '#cbd5e1', lineHeight: '1.5' }}>
+              <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-main)', lineHeight: '1.5' }}>
                 "{p.content_text}"
               </p>
+              {p.reaction_total > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {(p.reaction_top || []).map((item) => (
+                    <span key={item.emoji} className="badge badge-gray">
+                      {item.emoji} {item.count}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>

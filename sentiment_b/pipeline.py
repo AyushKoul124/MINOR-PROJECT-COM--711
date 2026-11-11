@@ -7,7 +7,7 @@ honour the 4 GB VRAM budget on GTX 1650 Ti:
        → torch.cuda.empty_cache()
     2. EmotionClassifier    (RoBERTa GoEmotions, ~500 MB)
        → torch.cuda.empty_cache()
-    3. StanceDetector       (DistilBART MNLI, ~700 MB)
+    3. StanceDetector       (DistilBART MNLI, ~260 MB)
        → torch.cuda.empty_cache()
     4. SarcasmDetector      (rule-based, no GPU)
 
@@ -37,6 +37,7 @@ from sqlalchemy import text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from sentiment_b.emotion import EmotionClassifier
+from sentiment_b.reactions import score_reactions
 from sentiment_b.sarcasm import SarcasmDetector
 from sentiment_b.sentiment import SentimentClassifier
 from sentiment_b.stance import StanceDetector
@@ -48,23 +49,37 @@ logger = logging.getLogger("sentiment_b.pipeline")
 
 
 def _load_channel_topics() -> dict[str, list[str]]:
-    """Load channel topic_tags from config/channels.yaml.
+    """Load topic tags from channels.yaml, then overlay the database.
 
-    Returns:
-        Dict mapping channel identifier → list of topic tag strings.
+    The database holds the live chats. A row still carrying the old
+    identical default is ignored so the yaml tag list can stand.
     """
+    topics: dict[str, list[str]] = {}
     try:
         with open("config/channels.yaml", "r", encoding="utf-8") as f:
             config = yaml.safe_load(f)
-        channels = config.get("channels", [])
-        return {
-            ch["identifier"]: ch.get("topic_tags", [])
-            for ch in channels
-            if ch.get("identifier")
-        }
+        for ch in config.get("channels", []):
+            if ch.get("identifier"):
+                topics[ch["identifier"]] = ch.get("topic_tags", [])
     except Exception as exc:
-        logger.warning("Could not load channel topics: %s (using defaults)", exc)
-        return {}
+        logger.warning("Could not load channel topics from yaml: %s", exc)
+
+    try:
+        from ingestion_a.topics import is_generic_topic_list
+        from storage.database import SyncSessionLocal
+        from storage.models.raw import MonitoredChannel
+
+        session = SyncSessionLocal()
+        try:
+            rows = session.query(MonitoredChannel.identifier, MonitoredChannel.topic_tags).all()
+        finally:
+            session.close()
+        for identifier, tags in rows:
+            if identifier and tags and not is_generic_topic_list(tags):
+                topics[identifier] = list(tags)
+    except Exception as exc:
+        logger.warning("Could not load channel topics from the database: %s", exc)
+    return topics
 
 
 class SentimentPipeline:
@@ -98,6 +113,7 @@ class SentimentPipeline:
         text: str,
         channel_id: str | None = None,
         content_language: str = "en",
+        reaction_counts: dict | None = None,
     ) -> dict:
         """Run the full pipeline on a single text string.
 
@@ -153,6 +169,7 @@ class SentimentPipeline:
 
         # ── Step 4: Sarcasm heuristic (no model, instant) ───────────────
         sarcasm_flag = self._sarcasm_detector.check(text, sentiment_result.valence)
+        reaction = score_reactions(reaction_counts)
 
         elapsed = time.perf_counter() - t0
         logger.info(
@@ -179,6 +196,7 @@ class SentimentPipeline:
             "stance_confidence": stance_result.confidence,
             "sarcasm_flag": sarcasm_flag,
             "valence": sentiment_result.valence,
+            **reaction.as_columns(),
         }
 
     # ── Batch Processing with Warm Models ────────────────────────────────
@@ -187,6 +205,7 @@ class SentimentPipeline:
         texts: list[str],
         channel_ids: list[str | None] | None = None,
         content_languages: list[str] | None = None,
+        reaction_counts: list[dict | None] | None = None,
     ) -> list[dict]:
         """Run the full pipeline on a batch of texts.
 
@@ -206,6 +225,8 @@ class SentimentPipeline:
             channel_ids = [None] * n
         if not content_languages:
             content_languages = ["en"] * n
+        if reaction_counts is None:
+            reaction_counts = [None] * n
 
         t0 = time.perf_counter()
         logger.info("Starting batch pipeline for %d posts...", n)
@@ -265,6 +286,7 @@ class SentimentPipeline:
                 "stance_confidence": stance_results[i].confidence,
                 "sarcasm_flag": sarcasm_flags[i],
                 "valence": sentiment_results[i].valence,
+                **score_reactions(reaction_counts[i]).as_columns(),
             })
 
         return results
@@ -292,7 +314,7 @@ class SentimentPipeline:
                 .filter(RawPost.processing_status == "pending")
                 .filter(RawPost.content_text.isnot(None))
                 .filter(RawPost.content_text != "")
-                .order_by(RawPost.id.asc())
+                .order_by(RawPost.posted_at.desc(), RawPost.id.desc())
                 .limit(limit)
                 .all()
             )
@@ -307,9 +329,12 @@ class SentimentPipeline:
             texts = [p.content_text for p in pending_posts]
             channel_ids = [p.channel_id for p in pending_posts]
             content_languages = [p.content_language or "en" for p in pending_posts]
+            reaction_counts = [p.reaction_counts for p in pending_posts]
 
             # Run batch pipeline
-            results = self.analyze_batch(texts, channel_ids, content_languages)
+            results = self.analyze_batch(
+                texts, channel_ids, content_languages, reaction_counts
+            )
 
             # Write results to sentiment_results_b
             for post, result in zip(pending_posts, results):
@@ -383,8 +408,11 @@ class SentimentPipeline:
             texts = [p.content_text for p in posts]
             channel_ids = [p.channel_id for p in posts]
             content_languages = [p.content_language or "en" for p in posts]
+            reaction_counts = [p.reaction_counts for p in posts]
 
-            results = self.analyze_batch(texts, channel_ids, content_languages)
+            results = self.analyze_batch(
+                texts, channel_ids, content_languages, reaction_counts
+            )
 
             for post, result in zip(posts, results):
                 stmt = pg_insert(SentimentResultB).values(

@@ -117,9 +117,10 @@ class RAGRetriever:
                 documents=[],
                 is_short_circuited=True,
                 abort_reason=(
-                    f"No grounded intelligence records found within confidence threshold "
-                    f"(cosine distance {nearest_distance:.3f} > {self.distance_cutoff:.2f}). "
-                    f"Request aborted to prevent hallucination."
+                    f"No indexed summary is close enough to answer this without guessing "
+                    f"(nearest cosine distance {nearest_distance:.3f}, cutoff {self.distance_cutoff:.2f}). "
+                    f"Ask about sentiment, audience demographics, network signals, or trending topics "
+                    f"after Run Analysis Now has indexed them."
                 ),
             )
 

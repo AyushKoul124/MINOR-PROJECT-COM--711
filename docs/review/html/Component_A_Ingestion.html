@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Component A — Ingestion</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 18mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", Calibri, sans-serif;
+  color: #1a1a1a;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+header.banner {
+  background: #1f4fff;
+  color: white;
+  padding: 14px 18px 12px;
+  margin: -2px 0 16px;
+}
+header.banner .kicker {
+  margin: 0;
+  font-size: 9pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+header.banner h1 {
+  margin: 4px 0 0;
+  font-size: 22pt;
+  line-height: 1.05;
+  font-weight: 700;
+}
+header.banner p { margin: 6px 0 0; font-size: 10.5pt; }
+h2 {
+  font-size: 13pt;
+  margin: 18px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #1f4fff;
+}
+h3 { font-size: 11.5pt; margin: 12px 0 4px; }
+p { margin: 6px 0; }
+ul, ol { margin: 6px 0 8px; padding-left: 18px; }
+li { margin: 2px 0; }
+.note, .warn, .say {
+  border: 1px solid #d9d9d9;
+  padding: 8px 12px;
+  margin: 10px 0;
+  background: #f7f8fb;
+}
+.warn { border-left: 4px solid #c2410c; background: #fff8f3; }
+.say { border-left: 4px solid #1f4fff; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 10pt; }
+th, td { border: 1px solid #d0d0d0; padding: 5px 7px; vertical-align: top; text-align: left; }
+th { background: #eef2ff; font-weight: 650; }
+code { font-family: Consolas, monospace; font-size: 9.5pt; background: #f3f4f6; padding: 0 3px; }
+.figure { margin: 10px 0 14px; page-break-inside: avoid; }
+.figure svg { width: 100%; height: auto; }
+.caption { font-size: 9pt; color: #444; margin-top: 3px; }
+footer {
+  margin-top: 18px;
+  font-size: 8.5pt;
+  color: #555;
+  border-top: 1px solid #ddd;
+  padding-top: 6px;
+}
+</style></head><body>
+<header class="banner">
+  <p class="kicker">Second review · academic prototype · not an operational system</p>
+  <h1>Component A — Ingestion</h1>
+  <p>How public Telegram posts get into the database, and how the demo still works offline.</p>
+</header>
+
+<div class="note">This brief is for the teammate who presents collection. The exam path is the offline seed. Live Telegram is extra and can fail on campus Wi-Fi or Telegram rate limits.</div>
+<h2>1. What this agent does</h2>
+<p>Component A collects public Telegram posts and stores them once. It does not decide whether a post is positive, topical, or coordinated. It only records the message, the channel, the time the message was posted, and any photo that was saved.</p>
+<p>The National Technical Research Organisation name is the origin of the public problem statement. This software is an undergraduate prototype. It is not an operational intelligence system.</p>
+<h2>2. Where it sits</h2>
+<div class="figure">
+<svg viewBox="0 0 720 168" xmlns="http://www.w3.org/2000/svg" role="img">
+  <rect x="8" y="18" width="110" height="52" fill="#1f4fff"/>
+  <text x="63" y="48" text-anchor="middle" fill="white" font-size="13" font-family="Segoe UI">A Ingestion</text>
+  <rect x="150" y="18" width="130" height="52" fill="#111"/>
+  <text x="215" y="42" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">PostgreSQL</text>
+  <text x="215" y="58" text-anchor="middle" fill="#d6ff3f" font-size="10" font-family="Segoe UI">raw posts</text>
+  <rect x="312" y="8" width="120" height="36" fill="#eef2ff" stroke="#1f4fff"/>
+  <text x="372" y="31" text-anchor="middle" font-size="12" font-family="Segoe UI">B per post</text>
+  <rect x="312" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="372" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">C window</text>
+  <rect x="448" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="508" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">D window</text>
+  <rect x="584" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="644" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">E window</text>
+  <rect x="400" y="108" width="200" height="40" fill="#111"/>
+  <text x="500" y="133" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">Ask: search, then one answer</text>
+  <path d="M118 44 H150" stroke="#111" stroke-width="1.5"/>
+  <path d="M280 44 H312" stroke="#111" stroke-width="1.5"/>
+  <path d="M372 88 V108" stroke="#111" stroke-width="1.2"/>
+</svg>
+<p class="caption">Figure 1. Posts land in Postgres. B reads one post at a time. C, D, and E recompute a time window. Ask searches the short summaries those agents write.</p>
+</div>
+<h2>3. Three ways a post can arrive</h2>
+<table>
+<tr><th>Path</th><th>When to use it</th><th>What it does</th></tr>
+<tr><td>Offline seed<br><code>ingestion_a/backfill.py --offline</code></td><td>The viva, and any room without internet</td><td>Replays a prepared set of posts into Postgres. This is the path that must work.</td></tr>
+<tr><td>Desktop export<br><code>ingestion_a/import_exported.py</code></td><td>When a chat was exported from Telegram Desktop</td><td>Reads the export and inserts posts. Message id plus channel slug prevents duplicates.</td></tr>
+<tr><td>Live client<br>Pyrofork, <code>download_latest</code></td><td>Optional demonstration only</td><td>Reads public channels, saves up to 80 recent messages, and stores photos under <code>Telegram Desktop</code>.</td></tr>
+</table>
+<h2>4. How a live pull works</h2>
+<ol>
+<li>One worker only. A second client would lock the Telegram session file.</li>
+<li>Channels are read with a pause and a small random wait, so Telegram is less likely to block the account.</li>
+<li>If Telegram returns a flood wait, the client sleeps for the time Telegram demands, then continues.</li>
+<li>Each saved row uses <code>posted_at</code> for the message time. <code>ingested_at</code> is only when our program stored it. Later agents must use <code>posted_at</code>.</li>
+<li>If the same message is imported again, the text time is kept. Photos and reaction counts can be updated.</li>
+</ol>
+<div class="figure">
+<svg viewBox="0 0 720 78" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="16" width="140" height="44" fill="#1f4fff"/><text x="78" y="43" text-anchor="middle" fill="white" font-size="13" font-family="Segoe UI">Public channel</text>
+  <rect x="180" y="16" width="150" height="44" fill="#111"/><text x="255" y="43" text-anchor="middle" fill="white" font-size="13" font-family="Segoe UI">One session</text>
+  <rect x="362" y="16" width="160" height="44" fill="#eef2ff" stroke="#1f4fff"/><text x="442" y="43" text-anchor="middle" font-size="13" font-family="Segoe UI">raw_posts</text>
+  <rect x="554" y="16" width="150" height="44" fill="#fff" stroke="#111"/><text x="629" y="43" text-anchor="middle" font-size="13" font-family="Segoe UI">status: pending</text>
+  <path d="M148 38 H180 M330 38 H362 M522 38 H554" stroke="#111" stroke-width="1.4"/>
+</svg>
+<p class="caption">Figure 2. A new post is stored as pending. Component B is the only agent that later marks it processed.</p>
+</div>
+<h2>5. What is stored</h2>
+<table>
+<tr><th>Table</th><th>Holds</th></tr>
+<tr><td><code>monitored_channels</code></td><td>Channel name, topic tags, last check.</td></tr>
+<tr><td><code>raw_posts</code></td><td>Text, photo path, view count, reaction counts, <code>posted_at</code>, processing status.</td></tr>
+<tr><td><code>raw_authors</code></td><td>Public display name and bio snapshot when a discussion author is visible. No private profile scrape.</td></tr>
+</table>
+<h2>6. What to show</h2>
+<p>Open <strong>Sources</strong>. It lists channels, how many posts are saved, and the last check. Say: “Collection writes rows. It does not analyse them.” Then show one photo path if a reviewer asks where images go: the <code>Telegram Desktop</code> folder, with the path also stored on the post.</p>
+<div class="say"><strong>One sentence.</strong> “We store the public post and the time Telegram gave it. Analysis is a later step, so a dead network cannot erase the demo.”</div>
+<h2>7. Related parts you may be asked about</h2>
+<table>
+<tr><th>Part</th><th>Relation to A</th></tr>
+<tr><td>Orchestrator</td><td>Does not collect. It tells B to read pending rows, then tells C, D, and E to recompute a window.</td></tr>
+<tr><td>Dashboard</td><td>Sources is view A. Overview counts saved posts and posts still waiting.</td></tr>
+<tr><td>Ask</td><td>Does not read raw posts directly. It searches short summaries written after analysis.</td></tr>
+<tr><td>Privacy</td><td>The design is public channels. A post-viva SQL script clears message text and display names.</td></tr>
+</table>
+<h2>8. Done, and not done</h2>
+<table>
+<tr><th>Done</th><th>Not for this review</th></tr>
+<tr><td>Schema, offline replay, export import, live client with photo save and flood-wait sleep.</td><td>A full history of every channel. The live pull is capped at 80 messages and was paused.</td></tr>
+<tr><td>Duplicate protection by platform message id.</td><td>No forensic hash, no deletion tracking. Both were left out of the brief on purpose.</td></tr>
+</table>
+<div class="warn"><strong>Do not claim</strong> that every chat on the phone has been downloaded, or that the live path is required for the exam.</div>
+<h2>9. Likely questions</h2>
+<table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Why not the download time?</td><td>Download time measures our delay. Topic speed and coordination use <code>posted_at</code>.</td></tr>
+<tr><td>Why one worker?</td><td>The Telegram session file is a single SQLite file. Two workers corrupt or lock it.</td></tr>
+<tr><td>Why did a live run stop?</td><td>Telegram asked the account to wait. The client sleeps. That is rate limiting, not a crash.</td></tr>
+</table>
+
+<footer>AI-Driven Social Media Audience Intelligence Framework · 7th semester CSE minor project · Public Telegram only · Figures describe the implemented design.</footer>
+</body></html>

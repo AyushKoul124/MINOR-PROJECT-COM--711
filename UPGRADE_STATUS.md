@@ -8,19 +8,19 @@
 |-----------|--------|-------|
 | Offline E2E | Pending | |
 | Agents A–E persist outputs | Partial | |
-| 7 dashboard views | Partial | Frontend refresh queued |
-| RAG citations / refuse | Partial | Index-after-trigger pending |
+| 7 dashboard views | Done | Frontend visual refresh applied |
+| RAG citations / refuse | Partial | Index-after-trigger wired in coordinator |
 | Run Analysis ≤50 in 15–25s | Pending | Verify on GTX 1650 Ti |
 
 ## Waves
 
 - [ ] Wave 0 — Audit smoke
-- [ ] Wave 1 — Foundation (.gitignore, scrub SQL, README)
-- [ ] Wave 2 — ML summaries + VRAM
-- [ ] Wave 3 — Orchestrator RAG hook + Celery
-- [ ] Wave 4 — Auth + API aliases + **frontend visual upgrade**
+- [x] Wave 1 — Foundation (.gitignore, scrub SQL, README)
+- [x] Wave 2 — ML summaries + VRAM (DistilBART footprint doc fix; VRAM purge after RAG)
+- [x] Wave 3 — Orchestrator RAG hook + Celery
+- [x] Wave 4 — Auth + API aliases + **frontend visual upgrade**
 - [ ] Wave 5 — Benchmarks + offline rehearsal
 
 ## Blocker
 
-Cursor was in **plan mode** when execution started. **Switch to Agent mode** and re-run: *"execute Wave 1–4 including frontend"*.
+~~Cursor was in **plan mode** when execution started.~~ Waves 1–4 implemented in Agent mode (Nov 2026).

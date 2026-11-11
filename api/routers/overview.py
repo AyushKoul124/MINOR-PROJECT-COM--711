@@ -5,7 +5,11 @@ from __future__ import annotations
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger("api.routers.overview")
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -60,6 +64,7 @@ def get_health(db: Session = Depends(get_sync_db)):
 
 
 @router.get("/overview", response_model=OverviewMetrics)
+@router.get("/overview/summary", response_model=OverviewMetrics, include_in_schema=False)
 def get_overview_metrics(db: Session = Depends(get_sync_db)):
     """Retrieve operational telemetry, queue metrics, and sentiment distribution."""
     # Active channels
@@ -111,10 +116,18 @@ def get_overview_metrics(db: Session = Depends(get_sync_db)):
 
 
 @router.post("/orchestrator/trigger", response_model=TriggerAnalysisResponse)
+@router.post("/overview/trigger-analysis", response_model=TriggerAnalysisResponse, include_in_schema=False)
 def trigger_analysis_now(req: TriggerAnalysisRequest):
     """Instant viva trigger: processes <= 50 pending posts and executes C/D/E window analytics."""
-    report = coordinator.trigger_full_analysis(
-        b_batch_limit=req.b_batch_limit,
-        window_hours=req.window_hours,
-    )
-    return TriggerAnalysisResponse(**report)
+    try:
+        report = coordinator.trigger_full_analysis(
+            b_batch_limit=req.b_batch_limit,
+            window_hours=req.window_hours,
+        )
+        return TriggerAnalysisResponse(**report)
+    except Exception as exc:
+        logger.error("trigger_full_analysis failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis pipeline error: {exc!s}",
+        ) from exc

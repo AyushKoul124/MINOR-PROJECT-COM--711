@@ -39,6 +39,11 @@ from storage.database import SyncSessionLocal
 from storage.models.raw import MonitoredChannel, RawPost
 from trend_d.agent import TrendAgent
 
+try:
+    from rag.indexer import RAGIndexer
+except ImportError:  # pragma: no cover — optional when RAG deps unavailable
+    RAGIndexer = None  # type: ignore[misc, assignment]
+
 logger = logging.getLogger("orchestrator.coordinator")
 
 
@@ -223,6 +228,32 @@ class AnalysisCoordinator:
             use_demo_threshold=True,
         )
 
+        # 3. RAG knowledge sync (Components B–E summaries → pgvector)
+        t_rag0 = time.perf_counter()
+        rag_metrics: dict[str, Any] = {"status": "skipped", "indexed_counts": {}, "elapsed_seconds": 0.0}
+        if RAGIndexer is not None:
+            try:
+                indexer = RAGIndexer()
+                indexed_counts = indexer.index_all_components()
+                rag_metrics = {
+                    "status": "success",
+                    "indexed_counts": indexed_counts,
+                    "total_indexed": sum(indexed_counts.values()),
+                    "elapsed_seconds": round(time.perf_counter() - t_rag0, 3),
+                }
+            except Exception as exc:
+                logger.error("RAG indexing after viva trigger failed: %s", exc, exc_info=True)
+                rag_metrics = {
+                    "status": "error",
+                    "error": str(exc),
+                    "indexed_counts": {},
+                    "elapsed_seconds": round(time.perf_counter() - t_rag0, 3),
+                }
+            finally:
+                purge_vram()
+        else:
+            rag_metrics["elapsed_seconds"] = round(time.perf_counter() - t_rag0, 3)
+
         total_elapsed = round(time.perf_counter() - t_start, 3)
         completed_at = datetime.now(timezone.utc)
 
@@ -237,6 +268,7 @@ class AnalysisCoordinator:
             "component_c": window_res.get("component_c", {}),
             "component_d": window_res.get("component_d", {}),
             "component_e": window_res.get("component_e", {}),
+            "rag_indexing": rag_metrics,
         }
 
         self._last_run_telemetry = telemetry

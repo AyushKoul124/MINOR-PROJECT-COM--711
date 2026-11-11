@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from rag.embedder import RAGEmbedder
@@ -23,6 +23,36 @@ from storage.models.rag import RAGDocument
 from storage.models.raw import RawPost
 
 logger = logging.getLogger("rag.indexer")
+
+
+def _format_cited_posts(session: Any, post_ids: list[Any] | None, limit: int = 3) -> str:
+    """Render up to `limit` source posts as citable excerpts for an evidence document."""
+    ids: list[int] = []
+    for raw in post_ids or []:
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+        if len(ids) >= limit:
+            break
+    if not ids:
+        return ""
+
+    posts = session.execute(select(RawPost).where(RawPost.id.in_(ids))).scalars().all()
+    by_id = {post.id: post for post in posts}
+    lines: list[str] = []
+    for post_id in ids:
+        post = by_id.get(post_id)
+        excerpt = " ".join((post.content_text or "").split()) if post else ""
+        if not excerpt:
+            continue
+        when = post.posted_at.strftime("%Y-%m-%d %H:%M UTC") if post.posted_at else "unknown time"
+        lines.append(
+            f"- Post #{post.id} | {post.channel_id} | {when}: \"{excerpt[:240]}\""
+        )
+    if not lines:
+        return ""
+    return "Cited posts:\n" + "\n".join(lines)
 
 
 class RAGIndexer:
@@ -86,7 +116,10 @@ class RAGIndexer:
                     f"Valence: {valence_str}. "
                     f"Dominant Emotion: {emotion_str} ({em_conf:.2f}). "
                     f"Policy Stance: {stance_str} ({st_conf:.2f}). "
-                    f"Sarcasm Flag: {s_res.sarcasm_flag}. Content: \"{text_snippet}\""
+                    f"Sarcasm Flag: {s_res.sarcasm_flag}. "
+                    f"Reaction valence: {(s_res.reaction_valence or 'none').upper()} "
+                    f"({s_res.reaction_total or 0} reactions). "
+                    f"Content: \"{text_snippet}\""
                 )
                 docs_to_index.append({
                     "component": "B",
@@ -174,25 +207,59 @@ class RAGIndexer:
             if not topics:
                 return 0
 
-            existing_stmt = select(RAGDocument.source_record_id).where(
-                RAGDocument.source_component == "D"
-            )
-            existing_ids = set(session.execute(existing_stmt).scalars().all())
+            # Replace Component D docs so cited post excerpts stay current.
+            session.execute(delete(RAGDocument).where(RAGDocument.source_component == "D"))
+            session.commit()
 
             docs_to_index: list[dict[str, Any]] = []
+            latest_end = max(t.window_end for t in topics)
+            latest = [t for t in topics if t.window_end == latest_end]
+            latest.sort(key=lambda row: row.rank or 99)
+            rollup_id = f"window-{latest_end.isoformat()}"
+            if latest:
+                parts = [
+                    f"'{t.topic_label}' ({t.post_count} posts, {t.velocity:.2f} posts/hour)"
+                    for t in latest[:5]
+                ]
+                cited_ids: list[Any] = []
+                for topic in latest[:3]:
+                    cited_ids.extend((topic.sample_post_ids or [])[:1])
+                cited = _format_cited_posts(session, cited_ids, limit=3)
+                docs_to_index.append({
+                    "component": "D",
+                    "record_id": rollup_id,
+                    "content": (
+                        "What are the latest trending topics and emergent publication velocities? "
+                        "The leading discourse topics in the trailing observation window are: "
+                        + "; ".join(parts)
+                        + "."
+                        + (f"\n\n{cited}" if cited else "")
+                    ),
+                    "window_start": latest[0].window_start,
+                    "window_end": latest_end,
+                })
+
             for t in topics:
                 rec_id = str(t.id)
-                if rec_id in existing_ids:
-                    continue
 
-                kws = ", ".join(t.topic_keywords or []) if t.topic_keywords else "None"
-                status = "SURGING (accelerating)" if t.acceleration > 0 else "COOLING"
+                raw_kws = t.topic_keywords or []
+                if isinstance(raw_kws, dict):
+                    kws = ", ".join(str(k) for k in list(raw_kws)[:8]) or "unspecified"
+                elif isinstance(raw_kws, list):
+                    kws = ", ".join(str(k) for k in raw_kws[:8]) or "unspecified"
+                else:
+                    kws = str(raw_kws) or "unspecified"
+                status = "surging" if (t.acceleration or 0) > 0 else "cooling"
 
+                cited = _format_cited_posts(session, t.sample_post_ids, limit=3)
                 summary = (
-                    f"[Emergent Trend Topic #{t.rank}] Theme: '{t.topic_label}'. "
-                    f"Status: {status}. Total posts in window: {t.post_count}. "
-                    f"Hourly publication velocity: {t.velocity:.4f} posts/hour. "
-                    f"Hourly acceleration: {t.acceleration:.4f}. Key terms: {kws}."
+                    f"Latest trending topics and publication velocity. "
+                    f"Rank {t.rank or 0}: '{t.topic_label}' is {status}. "
+                    f"{t.post_count} posts in the trailing window, "
+                    f"velocity {t.velocity:.2f} posts per hour, "
+                    f"acceleration {t.acceleration:.3f}. "
+                    f"Key terms: {kws}."
+                    + (f"\n\n{cited}" if cited else "")
                 )
                 docs_to_index.append({
                     "component": "D",

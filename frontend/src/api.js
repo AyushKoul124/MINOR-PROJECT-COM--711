@@ -1,63 +1,95 @@
 /**
  * API client helper communicating with the FastAPI backend on port 8000.
+ * Vite proxies /api → http://127.0.0.1:8000 (see vite.config.js).
  */
 
 const BASE_URL = '/api';
 
+function basicAuthHeader() {
+  const username = import.meta.env.VITE_API_BASIC_AUTH_USERNAME;
+  const password = import.meta.env.VITE_API_BASIC_AUTH_PASSWORD;
+  if (username && password) {
+    return { Authorization: `Basic ${btoa(`${username}:${password}`)}` };
+  }
+  return {};
+}
+
+async function apiFetch(path, options = {}) {
+  const headers = {
+    ...basicAuthHeader(),
+    ...(options.headers || {}),
+  };
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  } catch {
+    throw new Error(
+      'Cannot reach the API. In a terminal run: uvicorn api.main:app --host 127.0.0.1 --port 8000'
+    );
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (data == null) {
+      throw new Error(
+        `API returned ${res.status} with no JSON body. Start the backend: uvicorn api.main:app --host 127.0.0.1 --port 8000`
+      );
+    }
+    const detail = data?.detail;
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
+          : `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+  return data;
+}
+
 export async function fetchHealth() {
-  const res = await fetch(`${BASE_URL}/health`);
-  return res.json();
+  return apiFetch('/health');
 }
 
 export async function fetchOverview() {
-  const res = await fetch(`${BASE_URL}/overview`);
-  return res.json();
+  return apiFetch('/overview');
 }
 
 export async function triggerVivaAnalysis(bBatchLimit = 50, windowHours = 48) {
-  const res = await fetch(`${BASE_URL}/orchestrator/trigger`, {
+  return apiFetch('/orchestrator/trigger', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ b_batch_limit: bBatchLimit, window_hours: windowHours }),
   });
-  return res.json();
 }
 
 export async function fetchSentimentTimeline(windowHours = 48) {
-  const res = await fetch(`${BASE_URL}/sentiment/timeline?window_hours=${windowHours}`);
-  return res.json();
+  return apiFetch(`/sentiment/timeline?window_hours=${windowHours}`);
 }
 
 export async function fetchLatestSentiment(limit = 20) {
-  const res = await fetch(`${BASE_URL}/sentiment/latest?limit=${limit}`);
-  return res.json();
+  return apiFetch(`/sentiment/latest?limit=${limit}`);
 }
 
 export async function fetchDemographics(windowHours = 48) {
-  const res = await fetch(`${BASE_URL}/demographics?window_hours=${windowHours}`);
-  return res.json();
+  return apiFetch(`/demographics?window_hours=${windowHours}`);
 }
 
 export async function fetchTrends(windowHours = 48) {
-  const res = await fetch(`${BASE_URL}/trends?window_hours=${windowHours}`);
-  return res.json();
+  return apiFetch(`/trends?window_hours=${windowHours}`);
 }
 
 export async function fetchNetworkGraph(windowHours = 48) {
-  const res = await fetch(`${BASE_URL}/network/graph?window_hours=${windowHours}`);
-  return res.json();
+  return apiFetch(`/network/graph?window_hours=${windowHours}`);
 }
 
 export async function executeRAGQuery(question, topK = 5) {
-  const res = await fetch(`${BASE_URL}/rag/query`, {
+  return apiFetch('/rag/query', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, top_k: topK }),
   });
-  return res.json();
 }
 
 export async function fetchDataSources() {
-  const res = await fetch(`${BASE_URL}/datasources`);
-  return res.json();
+  return apiFetch('/datasources');
 }

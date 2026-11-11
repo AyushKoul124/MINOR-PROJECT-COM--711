@@ -152,7 +152,7 @@ export default function NetworkGraph() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-muted)' }}>
         <Activity className="animate-spin" size={28} style={{ marginRight: '10px' }} />
-        <span>Loading Network Topology & Louvain Modularity...</span>
+        <span>Loading the network...</span>
       </div>
     );
   }
@@ -163,55 +163,53 @@ export default function NetworkGraph() {
   const topBrokers = [...nodes].sort((a, b) => (b.betweenness || 0) - (a.betweenness || 0)).slice(0, 5);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="view-stack">
       {/* Topology Telemetry Row */}
       <div className="bento-grid">
-        <div className="bento-card" style={{ gridColumn: 'span 3' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
-            <span className="card-title">Network Nodes</span>
-            <span className="badge badge-blue">PRUNED &le; 500</span>
+            <span className="card-title">Accounts</span>
+            <span className="badge badge-blue">Shown</span>
           </div>
           <div className="kpi-value">{data?.total_nodes || 0}</div>
-          <div className="kpi-subtext">Channels & Pseudonymized Actors</div>
+          <div className="kpi-subtext">Channels and named actors</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 3' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
-            <span className="card-title">Interaction Edges</span>
-            <span className="badge badge-emerald">DIRECTED</span>
+            <span className="card-title">Connections</span>
+            <span className="badge badge-emerald">Links</span>
           </div>
           <div className="kpi-value">{data?.total_edges || 0}</div>
           <div className="kpi-subtext">Forwards, Mentions, Replies</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 3' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
-            <span className="card-title">Louvain Modularity</span>
-            <span className="badge badge-purple">Q = {data?.modularity || 0}</span>
+            <span className="card-title">Communities</span>
           </div>
           <div className="kpi-value">{data?.total_communities || 0}</div>
-          <div className="kpi-subtext">Behavioral Sub-Communities</div>
+          <div className="kpi-subtext">Groups that talk among themselves</div>
         </div>
 
-        <div className="bento-card" style={{ gridColumn: 'span 3' }}>
+        <div className="bento-card span-3">
           <div className="card-header">
-            <span className="card-title">CIB Anomalies</span>
-            <span className="badge badge-rose">&ge; 0.70 CUTOFF</span>
+            <span className="card-title">Similar posting</span>
           </div>
           <div className="kpi-value" style={{ color: (data?.cib_flagged_count || 0) > 0 ? 'var(--accent-rose)' : 'var(--text-main)' }}>
             {data?.cib_flagged_count || 0}
           </div>
-          <div className="kpi-subtext">Screening Signal (Advisory Only)</div>
+          <div className="kpi-subtext">Accounts that post in a similar pattern</div>
         </div>
       </div>
 
       {/* Main Canvas Graph Visualization */}
       <div className="bento-card" style={{ padding: '0', position: 'relative' }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span className="card-title"><Network size={16} /> 60 FPS WebGL/Canvas Interaction Graph</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <span className="badge badge-blue">Nodes Sized by Betweenness</span>
-            <span className="badge badge-rose">Red Ring = CIB Signal</span>
+          <span className="card-title"><Network size={16} /> How accounts connect</span>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="badge badge-blue">Larger means more central</span>
+            <span className="badge badge-rose">Red ring = similar posting</span>
           </div>
         </div>
 
@@ -219,7 +217,7 @@ export default function NetworkGraph() {
           ref={canvasRef}
           width={1000}
           height={480}
-          style={{ width: '100%', height: '480px', display: 'block', background: '#070b12', cursor: 'pointer' }}
+          style={{ width: '100%', height: '480px', display: 'block', background: '#f6f1e8', cursor: 'pointer' }}
           onClick={handleCanvasClick}
         />
 
@@ -230,7 +228,7 @@ export default function NetworkGraph() {
             bottom: '16px',
             right: '16px',
             width: '320px',
-            background: 'rgba(15, 23, 42, 0.95)',
+            background: '#fffdf8',
             border: '1px solid var(--border-subtle)',
             borderRadius: '8px',
             padding: '16px',
@@ -250,10 +248,10 @@ export default function NetworkGraph() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
               <div>Type: <span style={{ color: 'var(--text-main)' }}>{selectedNode.entity_type}</span></div>
               <div>Community: <span style={{ color: 'var(--accent-blue)' }}>#{selectedNode.community_id}</span></div>
-              <div>Betweenness Centrality: <span style={{ color: 'var(--text-main)' }}>{selectedNode.betweenness}</span></div>
-              <div>Degree Centrality: <span style={{ color: 'var(--text-main)' }}>{selectedNode.degree}</span></div>
+              <div>Connector score: <span style={{ color: 'var(--text-main)' }}>{selectedNode.betweenness}</span></div>
+              <div>Direct links: <span style={{ color: 'var(--text-main)' }}>{selectedNode.degree}</span></div>
               <div>
-                Anomaly Score: 
+                Similarity score: 
                 <span style={{ color: selectedNode.coordination_signal ? 'var(--accent-rose)' : '#34d399', fontWeight: 600 }}>
                   {' '}{selectedNode.anomaly_score} ({selectedNode.coordination_signal ? 'FLAGGED' : 'NORMAL'})
                 </span>
@@ -268,8 +266,7 @@ export default function NetworkGraph() {
         {/* Top Brokers */}
         <div className="bento-card">
           <div className="card-header">
-            <span className="card-title">Top Structural Information Brokers</span>
-            <span className="badge badge-blue">Betweenness Ranking</span>
+            <span className="card-title">Accounts that connect the most groups</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
@@ -291,7 +288,7 @@ export default function NetworkGraph() {
                   <span className="badge badge-gray">{n.entity_type}</span>
                 </div>
                 <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
-                  B = {n.betweenness}
+                  {n.betweenness}
                 </span>
               </div>
             ))}
@@ -301,13 +298,12 @@ export default function NetworkGraph() {
         {/* CIB Flagged Entities */}
         <div className="bento-card">
           <div className="card-header">
-            <span className="card-title">Advisory CIB Anomaly Flags</span>
-            <span className="badge badge-rose">&ge; 0.70 Screening Metric</span>
+            <span className="card-title">Flagged for similar posting</span>
           </div>
 
           {flaggedNodes.length === 0 ? (
             <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No entities exceeded the 0.70 CIB anomaly screening threshold.
+              No accounts were flagged.
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
@@ -326,10 +322,10 @@ export default function NetworkGraph() {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <AlertTriangle size={14} style={{ color: 'var(--accent-rose)' }} />
-                    <span style={{ fontWeight: 600, color: '#fecdd3' }}>{n.label}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--accent-rose)' }}>{n.label}</span>
                   </div>
                   <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-rose)', fontWeight: 700 }}>
-                    SCORE: {n.anomaly_score}
+                    {n.anomaly_score}
                   </span>
                 </div>
               ))}

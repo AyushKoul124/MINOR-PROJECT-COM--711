@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from api.auth import BasicAuthMiddleware
 from api.routers import (
     datasources_router,
     demographics_router,
@@ -46,6 +47,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Optional HTTP Basic Auth when API_BASIC_AUTH_PASSWORD is set (.env)
+app.add_middleware(BasicAuthMiddleware)
 
 # CORS configuration for React 18 frontend (Vite dev port 5173 / prod port 8000)
 app.add_middleware(
@@ -90,6 +94,8 @@ def root_status():
                 "/api/rag/query",
                 "/api/datasources",
                 "/api/orchestrator/trigger",
+                "/api/overview/summary",
+                "/api/overview/trigger-analysis",
             ],
         }
     )

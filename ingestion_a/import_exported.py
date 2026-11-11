@@ -35,7 +35,9 @@ from typing import Any
 
 from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.orm.attributes import flag_modified
 
+from ingestion_a.topics import is_generic_topic_list, topic_tags_for
 from storage.database import SyncSessionLocal
 from storage.models.raw import IngestionRun, MonitoredChannel, RawPost
 
@@ -117,20 +119,32 @@ def _slugify_channel_name(name: str) -> str:
 
 
 def _ensure_monitored_channel(session: Any, identifier: str, display_name: str) -> None:
-    """Register channel in monitored_channels if not already present."""
+    """Register a channel and replace the old identical three-tag default."""
+    tags = topic_tags_for(display_name)
+    now = datetime.now(timezone.utc)
     stmt = (
         pg_insert(MonitoredChannel)
         .values(
             identifier=identifier,
             display_name=display_name,
-            topic_tags=["osint", "defense", "geopolitics"],
+            topic_tags=tags,
             is_active=True,
-            last_polled_at=datetime.now(timezone.utc),
-            created_at=datetime.now(timezone.utc),
+            last_polled_at=now,
+            created_at=now,
         )
-        .on_conflict_do_nothing(index_elements=["identifier"])
+        .on_conflict_do_update(
+            index_elements=["identifier"],
+            set_={
+                "display_name": display_name,
+                "last_polled_at": now,
+            },
+        )
     )
     session.execute(stmt)
+    existing = session.query(MonitoredChannel).filter_by(identifier=identifier).one_or_none()
+    if existing is not None and is_generic_topic_list(existing.topic_tags):
+        existing.topic_tags = tags
+        flag_modified(existing, "topic_tags")
 
 
 # ─── HTML Chat Export Importer ────────────────────────────────────────────────

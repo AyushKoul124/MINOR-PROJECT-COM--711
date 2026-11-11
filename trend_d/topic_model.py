@@ -79,6 +79,7 @@ class TopicModeler:
         env_model = os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
         self.model_name = embedding_model_name or env_model
         self.min_topic_size = max(2, int(min_topic_size))
+        self.max_docs = max(1, int(max_docs))
         import torch
         cuda_ok = torch.cuda.is_available()
         default_dev = "cuda" if (os.getenv("DEVICE", "").lower() == "cuda" and cuda_ok) else "cpu"

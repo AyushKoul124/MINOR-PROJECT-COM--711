@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.schemas.models import TrendTopicItem, TrendsResponse
@@ -32,11 +32,16 @@ def get_trends(
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=window_hours)
 
+    latest = db.execute(
+        select(func.max(TrendTopicD.analyzed_at)).where(TrendTopicD.analyzed_at >= cutoff)
+    ).scalar()
     stmt = (
         select(TrendTopicD)
         .where(TrendTopicD.analyzed_at >= cutoff)
         .order_by(TrendTopicD.velocity.desc())
     )
+    if latest is not None:
+        stmt = stmt.where(TrendTopicD.analyzed_at >= latest - timedelta(minutes=2))
     topics = db.execute(stmt).scalars().all()
 
     items: list[TrendTopicItem] = []

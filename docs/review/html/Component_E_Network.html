@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"/>
+<title>Component E — Network and coordination screen</title>
+<style>
+@page { size: A4; margin: 16mm 15mm 18mm; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", Calibri, sans-serif;
+  color: #1a1a1a;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+header.banner {
+  background: #1f4fff;
+  color: white;
+  padding: 14px 18px 12px;
+  margin: -2px 0 16px;
+}
+header.banner .kicker {
+  margin: 0;
+  font-size: 9pt;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+header.banner h1 {
+  margin: 4px 0 0;
+  font-size: 22pt;
+  line-height: 1.05;
+  font-weight: 700;
+}
+header.banner p { margin: 6px 0 0; font-size: 10.5pt; }
+h2 {
+  font-size: 13pt;
+  margin: 18px 0 6px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #1f4fff;
+}
+h3 { font-size: 11.5pt; margin: 12px 0 4px; }
+p { margin: 6px 0; }
+ul, ol { margin: 6px 0 8px; padding-left: 18px; }
+li { margin: 2px 0; }
+.note, .warn, .say {
+  border: 1px solid #d9d9d9;
+  padding: 8px 12px;
+  margin: 10px 0;
+  background: #f7f8fb;
+}
+.warn { border-left: 4px solid #c2410c; background: #fff8f3; }
+.say { border-left: 4px solid #1f4fff; }
+table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 10pt; }
+th, td { border: 1px solid #d0d0d0; padding: 5px 7px; vertical-align: top; text-align: left; }
+th { background: #eef2ff; font-weight: 650; }
+code { font-family: Consolas, monospace; font-size: 9.5pt; background: #f3f4f6; padding: 0 3px; }
+.figure { margin: 10px 0 14px; page-break-inside: avoid; }
+.figure svg { width: 100%; height: auto; }
+.caption { font-size: 9pt; color: #444; margin-top: 3px; }
+footer {
+  margin-top: 18px;
+  font-size: 8.5pt;
+  color: #555;
+  border-top: 1px solid #ddd;
+  padding-top: 6px;
+}
+</style></head><body>
+<header class="banner">
+  <p class="kicker">Second review · academic prototype · not an operational system</p>
+  <h1>Component E — Network and coordination screen</h1>
+  <p>How accounts connect, and why a high score is a screen, not an accusation.</p>
+</header>
+
+<div class="note">This brief is for the teammate who presents the graph. The score is an unweighted average of three behaviour signals. It is not a verdict that an account is a bot or a campaign.</div>
+<h2>1. What this agent does</h2>
+<p>Component E builds a graph of public interactions: forwards, replies, and mentions. It finds communities, finds accounts that sit between communities, and computes a screening score for similar posting behaviour.</p>
+<h2>2. Where it sits</h2>
+<div class="figure">
+<svg viewBox="0 0 720 168" xmlns="http://www.w3.org/2000/svg" role="img">
+  <rect x="8" y="18" width="110" height="52" fill="#1f4fff"/>
+  <text x="63" y="48" text-anchor="middle" fill="white" font-size="13" font-family="Segoe UI">A Ingestion</text>
+  <rect x="150" y="18" width="130" height="52" fill="#111"/>
+  <text x="215" y="42" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">PostgreSQL</text>
+  <text x="215" y="58" text-anchor="middle" fill="#d6ff3f" font-size="10" font-family="Segoe UI">raw posts</text>
+  <rect x="312" y="8" width="120" height="36" fill="#eef2ff" stroke="#1f4fff"/>
+  <text x="372" y="31" text-anchor="middle" font-size="12" font-family="Segoe UI">B per post</text>
+  <rect x="312" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="372" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">C window</text>
+  <rect x="448" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="508" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">D window</text>
+  <rect x="584" y="52" width="120" height="28" fill="#fff" stroke="#111"/>
+  <text x="644" y="70" text-anchor="middle" font-size="11" font-family="Segoe UI">E window</text>
+  <rect x="400" y="108" width="200" height="40" fill="#111"/>
+  <text x="500" y="133" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">Ask: search, then one answer</text>
+  <path d="M118 44 H150" stroke="#111" stroke-width="1.5"/>
+  <path d="M280 44 H312" stroke="#111" stroke-width="1.5"/>
+  <path d="M372 88 V108" stroke="#111" stroke-width="1.2"/>
+</svg>
+<p class="caption">Figure 1. Posts land in Postgres. B reads one post at a time. C, D, and E recompute a time window. Ask searches the short summaries those agents write.</p>
+</div>
+<p>E recomputes a window. Edges are directed, because a forward has a direction. Community detection needs an undirected copy of that graph. The code makes a real copy, not a view, then runs Louvain. The import is <code>import community</code> from the package <code>python-louvain</code>.</p>
+<h2>3. The picture the page draws</h2>
+<table>
+<tr><th>On screen</th><th>Meaning</th></tr>
+<tr><td>Node</td><td>A channel or a public author.</td></tr>
+<tr><td>Line</td><td>A forward, reply, or mention.</td></tr>
+<tr><td>Size</td><td>Betweenness: how often the account sits on paths between others.</td></tr>
+<tr><td>Colour groups</td><td>Louvain communities on the undirected copy.</td></tr>
+<tr><td>Red ring</td><td>The screening score is at least 0.70.</td></tr>
+</table>
+<p>The API returns at most 500 nodes, the ones with the highest betweenness. Edges are only those whose both ends are in that set. That keeps the canvas from drawing dangling lines.</p>
+<h2>4. The three signals</h2>
+<table>
+<tr><th>Signal</th><th>Question it asks</th></tr>
+<tr><td>Posting synchrony</td><td>Do this account’s posts land within two minutes of other posts unusually often?</td></tr>
+<tr><td>Age and volume</td><td>Is a young account posting a lot? Missing creation dates weaken this signal.</td></tr>
+<tr><td>Duplicate content</td><td>Is the text unusually similar to other texts in the window? Similarity uses TF-IDF, not the neural embedder.</td></tr>
+</table>
+<p>The score is <code>(s1 + s2 + s3) / 3</code>. There are no learned weights. A flag is raised at 0.70. Both choices are locked so the review can be explained on a whiteboard.</p>
+<div class="figure">
+<svg viewBox="0 0 720 78" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="16" width="150" height="44" fill="#eef2ff" stroke="#1f4fff"/><text x="83" y="42" text-anchor="middle" font-size="12" font-family="Segoe UI">Synchrony</text>
+  <rect x="176" y="16" width="150" height="44" fill="#eef2ff" stroke="#1f4fff"/><text x="251" y="42" text-anchor="middle" font-size="12" font-family="Segoe UI">Age / volume</text>
+  <rect x="344" y="16" width="150" height="44" fill="#eef2ff" stroke="#1f4fff"/><text x="419" y="42" text-anchor="middle" font-size="12" font-family="Segoe UI">Near-copies</text>
+  <rect x="520" y="16" width="184" height="44" fill="#111"/><text x="612" y="36" text-anchor="middle" fill="white" font-size="12" font-family="Segoe UI">Average</text>
+  <text x="612" y="52" text-anchor="middle" fill="#d6ff3f" font-size="11" font-family="Segoe UI">flag at 0.70</text>
+</svg>
+<p class="caption">Figure 2. Three equal signals. No signal is allowed to outweigh the others by a trained weight.</p>
+</div>
+<h2>5. What to show</h2>
+<p>Open <strong>Network</strong>. Name one community count and one connector. If the flagged count is zero, say the screen found no account over 0.70 in this window. Zero is a result, not a broken page.</p>
+<div class="say"><strong>One sentence.</strong> “A red ring means the three behaviour scores average at least 0.70. It does not name an operator.”</div>
+<h2>6. Related parts</h2>
+<table>
+<tr><th>Part</th><th>Relation to E</th></tr>
+<tr><td>Tables</td><td><code>network_nodes_e</code>, <code>network_edges_e</code></td></tr>
+<tr><td>API</td><td><code>GET /api/network/graph</code></td></tr>
+<tr><td>Ask</td><td>May describe a community summary. It must not upgrade a screen into an attribution.</td></tr>
+<tr><td>Phase 5</td><td>An offline coordination file was planned to score two of the three signals. That benchmark has not been run. Do not quote precision or recall.</td></tr>
+</table>
+<h2>7. Done, and not done</h2>
+<table>
+<tr><th>Done</th><th>Not claimed</th></tr>
+<tr><td>Directed graph, undirected Louvain, three-signal average, 500-node cap, Network page.</td><td>No bot label, no legal finding, no published F1. The offline benchmark is still future work.</td></tr>
+</table>
+<div class="warn"><strong>Do not say</strong> “we detected a campaign” or “this account is fake”.</div>
+<h2>8. Likely questions</h2>
+<table>
+<tr><th>Question</th><th>Answer</th></tr>
+<tr><td>Why undirected Louvain?</td><td>The standard Louvain implementation we use expects an undirected graph. We keep the directed edges for the drawing.</td></tr>
+<tr><td>Why equal weights?</td><td>A learned weight would need a labelled set we have not evaluated. An equal average is explainable.</td></tr>
+<tr><td>Why is the same channel listed twice sometimes?</td><td>An older run could leave a second snapshot. The page is supposed to keep the latest window. If a duplicate remains, it is a snapshot bug, not two actors.</td></tr>
+</table>
+
+<footer>AI-Driven Social Media Audience Intelligence Framework · 7th semester CSE minor project · Public Telegram only · Figures describe the implemented design.</footer>
+</body></html>

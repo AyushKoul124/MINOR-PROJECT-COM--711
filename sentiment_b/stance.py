@@ -45,6 +45,9 @@ DEFAULT_TOPICS = [
     "Indian space programme and ISRO missions",
     "defence technology and military modernisation",
     "government science and technology policy",
+    "geopolitics and strategic affairs",
+    "armed conflict and military operations",
+    "open source intelligence reporting",
 ]
 
 

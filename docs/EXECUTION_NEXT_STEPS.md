@@ -1,14 +1,8 @@
 # Execution next steps (after "go for it")
 
-## Blocker
+## Status
 
-Implementation requires **Agent mode**. Plan mode allows only markdown edits; `.py` / `.jsx` / `.css` changes were rejected.
-
-**Action:** In Cursor, switch this chat to **Agent** (not Plan), then send:
-
-```text
-Execute the full upgrade plan: Wave 1–4 backend (RAG after trigger, auth, gitignore, post_viva_scrub) + frontend visual refresh per docs/FRONTEND_UPGRADE_SPEC.md
-```
+Waves 1–4 applied in Agent mode (see `UPGRADE_STATUS.md`). Wave 5 (benchmarks + offline rehearsal) remains manual verification on reference hardware.
 
 ## Priority backend (Wave 3)
 

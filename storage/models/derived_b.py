@@ -9,6 +9,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Index,
+    Integer,
     String,
     text,
 )
@@ -55,6 +56,15 @@ class SentimentResultB(Base):
     # Sarcasm heuristic: advisory uncertainty penalty (never inverts valence)
     sarcasm_flag: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     valence: Mapped[str | None] = mapped_column(String(16), default="neutral")
+
+    # Reaction-bar heuristic. Does not modify valence.
+    reaction_valence: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reaction_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reaction_total: Mapped[int | None] = mapped_column(Integer, default=0)
+    reaction_positive: Mapped[int | None] = mapped_column(Integer, default=0)
+    reaction_negative: Mapped[int | None] = mapped_column(Integer, default=0)
+    reaction_other: Mapped[int | None] = mapped_column(Integer, default=0)
+    reaction_top: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB, nullable=True)
 
     analyzed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("NOW()"), nullable=False

@@ -44,6 +44,7 @@ class TriggerAnalysisResponse(BaseModel):
     component_c: dict[str, Any]
     component_d: dict[str, Any]
     component_e: dict[str, Any]
+    rag_indexing: dict[str, Any] | None = None
 
 
 # ── Sentiment & Emotion Timeline ─────────────────────────────────────────────
@@ -58,6 +59,18 @@ class SentimentTimelinePoint(BaseModel):
     sadness_avg: float = 0.0
     surprise_avg: float = 0.0
     disgust_avg: float = 0.0
+    reaction_positive: int = 0
+    reaction_negative: int = 0
+
+
+class ReactionSummary(BaseModel):
+    posts_with_reactions: int = 0
+    positive: int = 0
+    negative: int = 0
+    other: int = 0
+    valence: str = "none"
+    score: float = 0.0
+    top: list[dict[str, Any]] = []
 
 
 class SentimentTimelineResponse(BaseModel):
@@ -66,6 +79,7 @@ class SentimentTimelineResponse(BaseModel):
     points: list[SentimentTimelinePoint]
     stance_breakdown: dict[str, int]
     sarcasm_count: int
+    reactions: ReactionSummary = Field(default_factory=ReactionSummary)
 
 
 # ── Demographics & k-Anonymity ───────────────────────────────────────────────

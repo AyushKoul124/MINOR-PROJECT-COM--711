@@ -51,6 +51,7 @@ def test_trigger_full_analysis() -> None:
     assert "component_c" in report
     assert "component_d" in report
     assert "component_e" in report
+    assert "rag_indexing" in report
 
     c_metrics = report["component_c"]
     d_metrics = report["component_d"]

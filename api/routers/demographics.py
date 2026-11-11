@@ -41,8 +41,13 @@ def get_demographics(
 
     items: list[DemographicClusterItem] = []
     suppressed_count = 0
+    seen_labels: set[str] = set()
 
     for c in clusters:
+        # Each analysis run inserts a new copy. Keep the newest row for each group.
+        if c.cluster_label in seen_labels:
+            continue
+        seen_labels.add(c.cluster_label)
         if c.below_threshold:
             suppressed_count += 1
 

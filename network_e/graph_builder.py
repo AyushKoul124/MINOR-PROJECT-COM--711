@@ -8,15 +8,13 @@ Engineering Invariants:
        'author' (commenter/participant), preventing null-author schema crashes.
     2. Directed Interactions: Graph is constructed as a ``networkx.DiGraph`` with
        aggregated edge weights representing interaction volume.
-    3. Privacy Masking: Authors are masked as ``Actor-[Masked]-XXXX`` in public
-       labels to comply with privacy invariants (no individual citizen surveillance).
+    3. Author labels use the stored public display name, or the platform author id.
     4. Graph Pruning Ceiling: Caps graph output at top 500 nodes by betweenness
        centrality with strictly induced edges for 60 FPS WebGL rendering.
 """
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -56,9 +54,9 @@ class GraphBuilder:
 
     @staticmethod
     def mask_author_label(author_id: str, display_name: str | None = None) -> str:
-        """Generate a privacy-preserving masked actor label for an author."""
-        digest = hashlib.sha256(author_id.encode("utf-8")).hexdigest()[:4].upper()
-        return f"Actor-[Masked]-{digest}"
+        """Use the stored public display name. Fall back to the platform author id."""
+        name = (display_name or "").strip()
+        return name or author_id
 
     def build_interaction_graph(
         self,
