@@ -1,173 +1,210 @@
 # AI-Driven Social Media Audience Intelligence Framework
 
-**Academic proof of concept · 7th-semester CSE minor project · Team of 4 · September–December 2026**
+Academic proof of concept for a 7th-semester CSE minor project. Team of 4. September–December 2026.
 
-This repository is a working research prototype that collects public Telegram posts and turns them into seven dashboard views. It reads each post for wording, emotion, and stance, then summarises a time window as an audience sketch, a set of themes, and an interaction graph. A natural-language question is answered only from the short summaries those steps write, and only when a summary is close enough to cite.
+The prototype collects public Telegram posts and presents them through seven dashboard pages. Each post can be read for wording, emotion, and stance. A time window can then be summarised as an audience sketch, a set of themes, and an interaction graph. A question on the Ask page is answered from those summaries, and only when a retrieved summary is close enough to cite.
 
-The system is a student testbed. The public problem statement is the only connection to its origin. This software is not an operational intelligence system, is not deployed by any agency, and does not claim an accuracy percentage. Every teammate is expected to be able to explain every part at the viva.
+The National Technical Research Organisation published the problem statement that motivated the work. This repository is the student testbed built for the viva. It is a research prototype on public posts. Accuracy percentages are omitted because the labelled comparison in Phase 5 has not been run.
 
-The product that must work in the exam room is the offline seed plus the local dashboard. Live Telegram and an online language model are optional. Campus networks, Telegram rate limits, and a missing API key must not be able to cancel the demonstration.
+The demonstration that must work in the exam room is the offline seed and the local dashboard. Live Telegram and an online language model are optional depth. A dropped campus network, a Telegram wait, or a missing API key leaves the seed path intact.
 
-**Reference machine.** NVIDIA GeForce GTX 1650 Ti, 4 GB graphics memory, 16 GB RAM, Windows 11. A machine without a usable GPU runs the same code on the CPU. The labels do not change. The run takes longer.
+| | |
+| --- | --- |
+| Course | COM-711, 7th-semester CSE minor project |
+| Reference machine | NVIDIA GeForce GTX 1650 Ti, 4 GB VRAM, 16 GB RAM, Windows 11 |
+| CPU fallback | Same code and the same labels. The run takes longer. |
+| Language and services | Python 3.11, FastAPI, PostgreSQL 16 + pgvector, Redis 7, React 18, Vite 6 |
+| Operating scale | About 30 public channels, hundreds to a few thousand posts |
+| Review batch | At most 50 posts with text |
 
----
+## Contents
 
-## 1. What the system is for
+1. [Purpose](#1-purpose)
+2. [Scope](#2-scope)
+3. [Architecture](#3-architecture)
+4. [Component A — collection](#4-component-a--collection)
+5. [Component B — one post](#5-component-b--one-post)
+6. [Component C — audience](#6-component-c--audience)
+7. [Component D — themes](#7-component-d--themes)
+8. [Component E — network](#8-component-e--network)
+9. [Ask](#9-ask)
+10. [Stored data](#10-stored-data)
+11. [Dashboard and API](#11-dashboard-and-api)
+12. [Models and the 4 GB limit](#12-models-and-the-4-gb-limit)
+13. [Configuration](#13-configuration)
+14. [How to run it](#14-how-to-run-it)
+15. [Demonstration](#15-demonstration)
+16. [Implementation status](#16-implementation-status)
+17. [Engineering record](#17-engineering-record)
+18. [Documents](#18-documents)
+19. [Repository map](#19-repository-map)
 
-The prototype answers five kinds of question about a recent window of public posts:
+## 1. Purpose
 
-- How does the wording lean, and how does that differ from the emoji reactions under the posts?
-- Which clusters of similar posts are arriving faster in the later half of the window?
-- What can be said about the group that spoke, without assigning an age or a place to one named person?
-- Which accounts sit on the paths between others, and which behaviour scores are high enough to flag for a closer look?
-- What do the system’s own summaries say about a question, and when should it refuse to answer?
+The dashboard answers five questions about a recent window of public posts.
 
-Those answers appear as charts and tables, and again through the Ask page. Ask does not browse the raw archive and invent a paragraph. It searches stored summaries. If nothing is close, it stops.
+| Question | Where it is answered |
+| --- | --- |
+| How does the wording lean, and how do the emoji reactions differ from that reading? | Sentiment |
+| Which clusters of similar posts arrive faster in the second half of the window? | Trends |
+| What can be said about the group that spoke, without assigning an age or a place to one named person? | Audience |
+| Which accounts sit on the paths between others, and which behaviour scores are high enough to inspect? | Network |
+| What do the system's own summaries say, and when is a question left unanswered? | Ask |
+
+Overview shows the saved posts themselves: the photograph, the full caption, the reaction counts, and the comments. Sources shows where those rows came from. Ask searches stored summaries. It receives the passages that cleared the distance cutoff, and it records every question.
 
 ## 2. Scope
 
-| In this prototype | Outside this prototype |
+| Inside this prototype | Outside this prototype |
 | --- | --- |
 | Public Telegram channels and groups | Private one-to-one chats as a collection design |
-| An offline seed that needs no network | A claim that the live account is required for the exam |
-| Five analysis agents and one coordinator | A multi-agent framework such as LangGraph or CrewAI |
-| Seven dashboard pages over HTTP | A PDF button inside the dashboard, or a live socket |
-| Aggregate audience sketches | A dossier on one person |
-| An advisory behaviour screen | A verdict that an account is a bot or that a campaign is real |
-| Published models, used as released | A model trained by the team, or a quoted accuracy percentage |
+| Offline seed, desktop export, and an optional live reader | A requirement that the exam use the live account |
+| Five analysis components and one coordinator | LangGraph, CrewAI, or another agent framework |
+| Seven dashboard pages over HTTP | A PDF button in the dashboard, or a live socket |
+| Aggregate audience sketches, with a floor of 50 accounts | A dossier on one person |
+| An advisory behaviour score from 0.0 to 1.0 | A verdict that an account is a bot or that a campaign is real |
+| Published models, used as released | A model trained by the team, or a quoted accuracy |
 
-X/Twitter is not collected live. Reddit, YouTube, Instagram, and Facebook are not implemented. A later report may discuss an offline coordination file for two of the three network signals. That benchmark has not been run, so this README does not quote precision or recall.
+X/Twitter, Reddit, YouTube, Instagram, and Facebook are absent from the collector. A later report may discuss an offline coordination file for two of the three network signals. That file has not been scored, so this document quotes neither precision nor recall.
 
-The intended operating scale is about 30 public channels and hundreds to a few thousand historical posts. The review button is specified for a batch of at most 50 posts, not for the whole archive.
+The review button is specified for a batch of at most 50 posts. It is specified for the reference GPU. A CPU laptop, and any run over the whole archive, sit outside that timing.
 
 ## 3. Architecture
 
-The browser never opens the database. It calls a FastAPI process. That process reads and writes PostgreSQL. Redis is present for background jobs. Docker runs only PostgreSQL 16 with the pgvector extension, and Redis 7. The API, the models, and the website run on the host.
+The browser calls FastAPI. FastAPI reads and writes PostgreSQL. Redis is the broker for the optional Celery cycle. Docker runs PostgreSQL 16 with pgvector, and Redis 7. The API, the models, and the website run on the host.
 
-```text
-React dashboard (port 5173)
-        |
-        |  HTTP, Basic Auth on /api except /api/health
-        v
-FastAPI (port 8000)
-        |
-        +--> PostgreSQL 16 + pgvector     raw posts, analysis rows, Ask log
-        +--> Redis 7                      broker for the optional Celery cycle
-        |
-        +--> Component A   save a post
-        +--> Component B   read one post
-        +--> Components C, D, E   recompute a time window
-        +--> Ask           search summaries, then write one answer
+```mermaid
+flowchart LR
+  UI["React dashboard :5173"] --> API["FastAPI :8000"]
+  API --> PG[("PostgreSQL 16 + pgvector")]
+  API --> RD[("Redis 7")]
+  API --> A["A  save the post"]
+  API --> B["B  read one post"]
+  API --> CDE["C D E  recompute the window"]
+  API --> ASK["Ask  search summaries"]
+  A --> PG
+  B --> PG
+  CDE --> PG
+  ASK --> PG
 ```
 
-Five packages are the analytical identity of the project. The letters are stable: a table, a module, and a review brief can be traced to the same letter.
+The letter on each component is stable. The same letter appears on the package, the tables, and the review brief.
 
-| Letter | Package | Kind of work | What it writes |
+| Letter | Package | Work | Tables |
 | --- | --- | --- | --- |
 | A | `ingestion_a/` | Save public posts | `monitored_channels`, `raw_posts`, `raw_authors`, `ingestion_runs` |
 | B | `sentiment_b/` | Read one post | `sentiment_results_b` |
 | C | `demographic_c/` | Sketch a group | `demographic_aggregates_c` |
-| D | `trend_d/` | Find themes and their speed | `trend_topics_d` |
-| E | `network_e/` | Draw the graph and screen behaviour | `network_nodes_e`, `network_edges_e` |
+| D | `trend_d/` | Themes and their speed | `trend_topics_d` |
+| E | `network_e/` | Graph and behaviour screen | `network_nodes_e`, `network_edges_e` |
 | — | `orchestrator/` | Run B, then refresh C, D, and E | — |
 | — | `rag/` | Search summaries and answer | `rag_documents`, `rag_query_log` |
 | — | `api/`, `frontend/` | Serve the seven pages | — |
 
-### Two different clocks, and two different triggers
+### Clocks
 
-`posted_at` is the time Telegram put on the message. `ingested_at` is the time this program stored the row. Every window, every speed calculation, and every synchrony check uses `posted_at`. Using the download time would measure our delay, not the conversation.
+`posted_at` is the time on the Telegram message. `ingested_at` is the time this program stored the row. Windows, velocity, and synchrony use `posted_at`. The download time measures scraper lag.
 
-Component B is the only row runner. A new post is `pending`. After B finishes, the code marks it `processed`. Components C, D, and E do not look at that flag. Each of them reads every post whose `posted_at` falls inside the window, usually the last 48 hours, and writes a fresh snapshot. At this project’s size a full recompute is simpler than an incremental topic model or an incremental graph, and it is the locked design.
+### Two triggers
 
-The background design is a Celery Beat cycle: collection staggered across the channels, B on a short cycle, C and D less often, E less often still. The ingestion worker must run at `--concurrency=1`, because the Telegram session file is a single SQLite file. The review does not have to wait for that cycle. **Run analysis** calls the same coordinator immediately.
+Component B is the row runner. A new post is `pending`. After B finishes, the row is `processed`. Components C, D, and E ignore that flag. Each of them reads every post whose `posted_at` falls inside the window, usually the last 48 hours, and writes a fresh snapshot. At this scale a full recompute is the locked design.
 
-### What “Run analysis” actually does
+The background design is a Celery Beat cycle: collection staggered across the channels, then B, then C and D, then E. The ingestion worker runs at `--concurrency=1` because the Telegram session file is one SQLite file. **Run analysis** calls the same coordinator immediately, without waiting for the beat.
 
-1. Take waiting posts that contain words. Stop at 50 for the review button.
+### Run analysis
+
+1. Take waiting posts that contain words. The review button stops at 50.
 2. Load the sentiment model, score the batch, and free the graphics card.
 3. Load the emotion model, score the batch, and free the card.
 4. Load the stance model, score the batch, and free the card.
-5. Apply the sarcasm rule and the reaction-bar score. Neither needs the graphics card.
+5. Apply the sarcasm rule and the reaction-bar score. Neither step uses the card.
 6. Mark those posts `processed`.
-7. Recompute the audience, the themes, and the graph for the window. Theme input is capped at 500 documents.
+7. Recompute the audience, the themes, and the graph. Theme input is capped at 500 documents.
 8. Embed the short summaries so Ask can search them.
 
-On the reference GPU, that capped path is specified to finish in 15 to 25 seconds. That sentence is not a promise for a CPU laptop, and it is not a promise for thousands of posts. Empty captions are skipped: a photograph with no words cannot be given a text label.
+On the reference GPU that capped path is specified at 15–25 seconds. A photograph with an empty caption is skipped by B, because a text label needs words. The same photograph still appears on Overview.
 
 ## 4. Component A — collection
 
-Collection stores a public post once. It does not decide whether the wording is positive, topical, or coordinated.
+Collection stores a public post. It does not label sentiment, topic, or coordination.
 
-Three doors write the same tables.
-
-| Door | Command | When it is used |
+| Door | Command | Use |
 | --- | --- | --- |
-| Offline seed | `python -m ingestion_a.backfill --offline` | The review, and any room without a stable network. Prepared posts are given recent times so the 48-hour pages are not empty. |
-| Desktop export | `python -m ingestion_a.import_exported` | A Telegram Desktop export, HTML (`messages.html`) or JSON (`result.json`). |
+| Offline seed | `python -m ingestion_a.backfill --offline` | The review, and any room without a stable network. Prepared posts receive recent times so the 48-hour pages are populated. |
+| Desktop export | `python -m ingestion_a.import_exported` | A Telegram Desktop export: HTML (`messages.html`) or JSON (`result.json`). |
 | Live reader | `python -m ingestion_a.download_latest` | Optional. Public channels and groups whose titles match the project subjects. |
 
-The live reader keeps the latest 80 messages and any photos, which are saved under `Telegram Desktop/<channel>/photos/`. History longer than one page is read in pages of 80, continuing from the last message id, so a full-history run is not cut off after the first page. A repeated message is recognised by platform and message id. The second import may update the photo path, the reaction counts, and the view count. It does not wipe text that has already been analysed, and it does not move `posted_at`.
+Photos are saved under `Telegram Desktop/<channel>/photos/<message_id>.jpg`. History is read in pages of 80. A full-history run continues from the last message id, so it is not cut off after the first page. A repeated message is recognised by platform and message id. A later import may refresh the photo path, the reaction counts, and the view count. It leaves analysed text in place, and it leaves `posted_at` in place.
 
-| Command | What it pulls |
-| --- | --- |
-| `python -m ingestion_a.download_latest` | Project-related public chats, latest 80 messages each |
-| `python -m ingestion_a.download_latest --middle-east` | Middle East titles first. Mediterranean Man, Middle East Spectator, and MiddleEast GC lead. No 80-message cap. India’s North East is not treated as the Middle East. |
-| `python -m ingestion_a.download_latest --indian-defence` | Indian defence titles first (army, navy, air force, named defence channels). Still capped at 80. Gore channels, academies, and job boards stay out. |
-| `python -m ingestion_a.download_latest --comments` | Discussion replies for the newest posts already in the database, up to 25 replies on each of the newest 48 posts |
+| Command | Selection | Cap |
+| --- | --- | --- |
+| `python -m ingestion_a.download_latest` | Project-related public chats | Latest 80 messages |
+| `python -m ingestion_a.download_latest --middle-east` | Middle East titles first: Mediterranean Man, Middle East Spectator, MiddleEast GC | None. India's North East is a different subject. |
+| `python -m ingestion_a.download_latest --indian-defence` | Indian defence titles first: army, navy, air force, and the named defence channels | Latest 80 messages. Gore channels, academies, and job boards stay out. |
+| `python -m ingestion_a.download_latest --comments` | Discussion replies on posts already stored | Newest 48 posts, at most 25 replies each |
 
-Books, films, job posts, and cracked software are left out of every mode. Decorative Unicode in a title is folded to plain letters before the subject check, otherwise a real channel looks like a random string. The force-include list is an exact title after that fold, so “Rootsec” is kept and “Rootsec [Cracked Softwares]” is not.
+Books, films, job posts, and cracked software are excluded in every mode. A title is folded to plain letters before the subject check, so decorative Unicode still matches. Force-include is an exact title after that fold: `Rootsec` is kept, and `Rootsec [Cracked Softwares]` is excluded.
 
-If Telegram returns a flood wait, the reader sleeps for the time Telegram demands, flushes the rows already collected, and then continues the same chat.
+A flood wait is stored progress plus a sleep. The reader flushes the rows it already holds, sleeps for the time Telegram returns, and resumes the same chat from the last message id.
 
-A stored post holds the text, the message time, the view count, the reaction counts, a photo path when a picture was saved, the id of the message it replies to, and the processing status. Comments from a channel’s linked discussion are stored as their own rows. Their id contains `_comment_`, and `reply_to_id` points at the channel post, so the overview can show them under that post instead of as a second card. A public display name is stored when a person actually wrote a comment. Phone numbers are not stored. Subscriber lists are not available from the interface this project uses.
+A stored post holds the text, `posted_at`, the view count, the reaction counts, a photo path when a picture was saved, `reply_to_id`, and `processing_status`. A discussion comment is its own row. The id contains `_comment_`, and `reply_to_id` is the channel message, so Overview attaches the comment to that post. A public display name is stored when a person wrote the comment. Phone numbers are never stored. Subscriber lists are unavailable on the interface this project uses.
 
-Some channels have no linked discussion. Telegram then refuses the comment request, and that post stays without a comment thread. Replies that were already inside the same chat are still shown.
+A channel with no linked discussion returns no thread. Replies that already exist inside the same chat are still attached.
+
+One live client may hold `socmint_session`. A second process locks the session file.
 
 ## 5. Component B — one post
 
-B writes one row in `sentiment_results_b` for each post it can read. The four text readings and the reaction bar stay separate. A crowd of likes does not rewrite the text label.
+B writes one row in `sentiment_results_b`. The text readings and the reaction bar stay separate. Emoji counts do not rewrite the text label.
 
 | Reading | Method | Output |
 | --- | --- | --- |
 | Sentiment | `cardiffnlp/twitter-xlm-roberta-base-sentiment` | Positive, neutral, or negative. About 1.1 GB. |
-| Emotion | `SamLowe/roberta-base-go_emotions`, mapped to Ekman’s six emotions plus neutral | Joy, anger, sadness, fear, disgust, surprise, or neutral. About 500 MB. |
+| Emotion | `SamLowe/roberta-base-go_emotions`, mapped to Ekman's six plus neutral | Joy, anger, sadness, fear, disgust, surprise, or neutral. About 500 MB. |
 | Stance | `valhalla/distilbart-mnli-12-3` against the channel topic | Supportive, against, neutral, or unclear. About 260 MB. |
-| Sarcasm | Rules on the text and the emoji. No neural model. | A flag. Confidence drops. The sentiment label is not flipped. |
-| Reaction bar | Positive emoji against negative emoji, divided by their sum | A separate score. The cutoff is 0.15. Unmapped emoji, including “?”, do not move it. |
+| Sarcasm | Rules on the text and the emoji. No neural model. | A flag and a lower confidence. The sentiment label stays as the model wrote it. |
+| Reaction bar | `(positive − negative) / (positive + negative)` | A separate score. The cutoff is 0.15. Unmapped emoji, including `?`, stay in `other` and leave the ratio unchanged. |
 
-Stance uses a hard threshold of 0.60. If the best score is below that line, the post is not forced onto a side. The larger BART checkpoint, about 1.6 GB, is a comparison for the written report only. It is not loaded in the demo.
+Stance uses a hard threshold of 0.60. Below that line the post is `neutral` or `unclear`. `facebook/bart-large-mnli`, about 1.6 GB, is reserved for an offline comparison in the written report. The running process loads DistilBART.
 
-The models are Hugging Face checkpoints used off the shelf. The team did not train them. They run one after another because the reference card cannot hold them together. If CUDA is unavailable, the same order runs on the CPU.
+The checkpoints are used as published. The team did not train them. They load one at a time because the reference card cannot hold them together. When CUDA is unavailable, the same order runs on the CPU.
 
-Newest `posted_at` values are read first, so a freshly saved post is not stuck behind an older backlog. The Sentiment page shows analysed posts inside the 48-hour window, including the first saved photo when the post has one. A post that is still `pending` does not appear there. That is the difference between “saved” and “read”. The Overview page does not wait for this step: a saved post is visible there with its picture, reactions, and comments before B has run.
+B reads the newest `posted_at` first, so a fresh post is ahead of an older backlog. The Sentiment page lists analysed posts inside the 48-hour window and shows the first saved photo. A `pending` post stays off that page. Overview lists the saved post, the photo, the reactions, and the comments before B has run.
 
-## 6. Component C — the group, not the person
+## 6. Component C — audience
 
-C summarises who appears to be speaking in the window: coarse age bands, region hints, language, interests, and the hours posts arrive in India Standard Time. The inputs are public. A broadcast channel contributes its name, its topic tags, and the hours it posts. A discussion contributes the public display name and bio of people who actually wrote. Anyone who never speaks is invisible, because Telegram does not provide the subscriber list. The result is a keyword sketch, not a census.
+C summarises the group speaking in the window: coarse age bands, region hints, language, interests, and the hours posts arrive in India Standard Time. A broadcast channel contributes its name, its topic tags, and its posting hours. A discussion contributes the public display name and bio of people who wrote. A subscriber who never writes is absent, because the collector has no subscriber list. The result is a keyword sketch.
 
-The privacy rule is k-anonymity with k at least 50, in line with the data-minimisation idea of India’s DPDP Act 2023. A group smaller than 50 accounts is stored with `below_threshold` set. The research line stays 50. A demo run may use 15 so a small seed still produces a card. A card under 50 must be described as below the line, not as a finding about a population. A card with nobody speaking under a public name does not draw age, place, language, or interest bars. The page keeps the newest snapshot of each group label, so a repeated run does not stack identical cards.
+The privacy floor is k-anonymity with k = 50, in line with the data-minimisation idea in India's DPDP Act 2023. A group under 50 accounts is stored with `below_threshold` set. The research line stays at 50. A demo run may use 15 so a small seed still produces a card, and that card is described as below the line. A card whose `account_count` is under 1 draws no age, place, language, or interest bars. The page keeps the newest snapshot of each label, so a repeated run does not stack duplicate cards. Each run inserts a new snapshot. It does not invent accounts to reach 50.
 
-The hour chart is counted from `posted_at`, converted to India Standard Time (UTC+5:30). Morning is 06:00–12:00, afternoon 12:00–18:00, evening 18:00–23:00, and night 23:00–06:00. The page draws all 24 hours and names the busiest hour. Those ratios are not a fixed template.
+The hour chart is counted from `posted_at`, shifted to IST (UTC+5:30).
 
-Each run inserts a new snapshot. It does not silently invent accounts to reach 50.
+| Part of the day | Hours |
+| --- | --- |
+| Morning | 06:00–12:00 |
+| Afternoon | 12:00–18:00 |
+| Evening | 18:00–23:00 |
+| Night | 23:00–06:00 |
 
-## 7. Component D — themes and speed
+The page draws all 24 hours and names the busiest hour. The ratios come from the stored messages.
 
-D groups posts in the window into themes and ranks those themes by how fast they are being posted.
+## 7. Component D — themes
+
+D groups posts in the window and ranks the groups by posting speed.
 
 1. Take posts in the window that have text. The clock is `posted_at`.
-2. Embed each post with `paraphrase-multilingual-MiniLM-L12-v2`. The same model embeds Ask queries. The vector length is 384.
-3. Cluster with BERTopic and HDBSCAN. The minimum topic size is 3, so a small student corpus can still form a theme.
-4. Cap the run at 500 documents so memory stays bounded.
-5. Name the theme from its distinctive words. Those words are extracted terms, not a headline written by a person.
+2. Embed each post with `paraphrase-multilingual-MiniLM-L12-v2`. Ask uses the same model. The vector length is 384.
+3. Cluster with BERTopic and HDBSCAN. `min_topic_size` is 3, so a small corpus can still form a theme.
+4. Cap the run at 500 documents.
+5. Name the theme from its distinctive words. The name is an extracted term list.
 
-The window is then split in half. Velocity is posts in the theme divided by hours in the whole window. Acceleration compares the second half with the first. A positive change is the “rising” mark. A negative change means the theme is cooling. Neither number is a prediction of tomorrow.
+The window is split in half. Velocity is posts in the theme divided by hours in the whole window. Acceleration compares the second half with the first. A positive change is the rising mark. A negative change means the theme is cooling. Neither number predicts the next day.
 
-D does not decide who is coordinated. That question belongs to Component E. D also does not require B to have finished: it clusters raw text.
+D clusters raw text. It does not wait for B, and it does not decide who is coordinated. That question belongs to Component E.
 
-## 8. Component E — the graph and the screen
+## 8. Component E — network
 
-E builds a directed graph of public interactions: forwards, replies, and mentions. Community detection needs an undirected graph, so the code makes a real undirected copy and runs Louvain from the `python-louvain` package (`import community`). The drawing keeps the directed edges.
+E builds a directed graph of public interactions: forwards, replies, and mentions. Louvain needs an undirected graph, so the code builds a real undirected copy and runs `python-louvain` (`import community`). The drawing keeps the directed edges.
 
 | On the page | Meaning |
 | --- | --- |
@@ -177,125 +214,121 @@ E builds a directed graph of public interactions: forwards, replies, and mention
 | Colour | Louvain community on the undirected copy |
 | Mark | The behaviour score is at least 0.70 |
 
-The API returns at most 500 nodes, the ones with the highest betweenness. Edges are only those whose both ends are in that set.
+The API returns at most 500 nodes, chosen by betweenness. An edge is included when both ends are in that set.
 
-The score is an unweighted average of three signals. There are no learned weights.
+The score is an unweighted mean of three signals. There are no learned weights.
 
-| Signal | Question |
+| Signal | Definition |
 | --- | --- |
-| Posting synchrony | Do this account’s posts land within two minutes of other posts unusually often? |
-| Age and volume | Is a young account posting a lot? A missing creation date weakens this signal. |
-| Near-duplicate text | Is the wording unusually similar to other text in the window? Similarity here is TF-IDF, not the neural embedder. |
+| Posting synchrony | This account's posts land within 120 seconds of other posts more often than the baseline. |
+| Age and volume | A young account is posting a large volume. A missing creation date weakens the signal. |
+| Near-duplicate text | The wording is unusually close to other text in the window, measured with TF-IDF. |
 
-`anomaly_score = (s1 + s2 + s3) / 3`. A flag is raised at 0.70. Both choices are locked so they can be written on a whiteboard. The flag is an advisory screen. It is not attribution, and it is not a bot label. Zero flagged accounts is a result, not a broken page.
+`anomaly_score = (s1 + s2 + s3) / 3`. The flag threshold is 0.70. The score is an advisory screen from 0.0 to 1.0. It is a screening heuristic. Zero flagged accounts is a valid result.
 
 ## 9. Ask
 
-Ask is not a sixth analysis. It searches the short summaries B, C, D, and E have already written.
+Ask searches the short summaries already written by B, C, D, and E.
 
-1. Embed the question with the same MiniLM model.
+1. Embed the question with MiniLM.
 2. Retrieve the nearest summaries from pgvector by cosine distance.
-3. If the nearest distance is greater than 0.65, stop. A fluent invention is worse than no answer.
-4. Otherwise one language model writes a short answer from those passages only.
+3. If the nearest distance is greater than 0.65, stop and return no generated answer.
+4. Otherwise one language model writes a short answer from those passages.
 5. Write the question, the passages, and the answer to `rag_query_log`.
 
-The writer depends on `LLM_PROVIDER` in `.env`.
-
-| Setting | Writer |
+| `LLM_PROVIDER` | Writer |
 | --- | --- |
 | `ollama` | Local `llama3.2:3b`, about 2 GB, 4-bit. This is the air-gapped path. |
-| `groq` | Groq, only when `GROQ_API_KEY` is set |
-| `xai` | xAI, only when `XAI_API_KEY` is set and begins with the `xai-` prefix |
-| Anything else, or no reachable model | A short extract of the retrieved summaries. No network call. |
+| `groq` | Groq, when `GROQ_API_KEY` is set |
+| `xai` | xAI, when `XAI_API_KEY` is set and begins with `xai-` |
+| Any other value, or an unreachable model | A short extract of the retrieved summaries, with no network call |
 
-Search always happens in Postgres first. The language model never sees the raw archive. Keys stay in `.env`. They are not stored in this repository.
+Retrieval runs in Postgres before any language model is called. The model receives the retrieved summaries. Keys live in `.env` and are absent from the repository.
 
-## 10. Data stored in PostgreSQL
+## 10. Stored data
 
-The first migration enables `CREATE EXTENSION IF NOT EXISTS vector`. Later migrations add the emotion columns and the reaction score.
+The first migration runs `CREATE EXTENSION IF NOT EXISTS vector`. Later migrations add the emotion columns and the reaction score.
 
-| Table | Holds |
+| Table | Contents |
 | --- | --- |
-| `monitored_channels` | Channel name, topic tags, last check |
-| `raw_posts` | Text, photo path, views, reactions, reply target, both timestamps, processing status. Discussion comments use an id containing `_comment_`. |
-| `raw_authors` | Public display name and bio snapshot, when a discussion author is visible |
+| `monitored_channels` | Channel identifier, display name, topic tags, last poll |
+| `raw_posts` | Text, photo path, views, reaction counts, `reply_to_id`, `posted_at`, `ingested_at`, `processing_status`. Discussion comments use an id containing `_comment_`. |
+| `raw_authors` | Public display name and bio, when a discussion author is visible |
 | `ingestion_runs` | One record per collection run |
-| `sentiment_results_b` | One reading per post |
+| `sentiment_results_b` | Valence, emotion, stance, sarcasm flag, and the separate reaction score |
 | `demographic_aggregates_c` | One audience snapshot per run and group label |
-| `trend_topics_d` | Themes, velocity, and acceleration for one window |
+| `trend_topics_d` | Theme terms, velocity, and acceleration for one window |
 | `network_nodes_e`, `network_edges_e` | The graph for one window |
 | `rag_documents` | Embedded summaries, 384 dimensions |
 | `rag_query_log` | Every question and the passages used to answer it |
 
-After the exam, `scripts/post_viva_scrub.sql` sets message text, display names, and bios to null. That is the approved way to clear personal text. The project does not keep a second compliance ledger.
+After the exam, `scripts/post_viva_scrub.sql` sets message text, display names, and bios to null. That script is the approved purge. The project keeps no second compliance ledger.
 
-## 11. The dashboard
+## 11. Dashboard and API
 
-The website is React 18, built with Vite 6. Styling is the project’s own CSS: a light editorial page, white cards, and blue marks. Tailwind, Recharts, and a force-graph library appear in early notes and were not added. The development server proxies `/api` to `127.0.0.1:8000`.
+The website is React 18 on Vite 6, styled with the project's own CSS: a light editorial page, white cards, and blue marks. Tailwind, Recharts, and a force-graph library are named in early notes and are absent from `package.json`. Vite proxies `/api` to `127.0.0.1:8000`.
 
-| Page | Route in the API | What a reviewer should hear |
+| Page | API | What the page shows |
 | --- | --- | --- |
-| Overview | `GET /api/overview` and `GET /api/overview/posts` | Counts of saved posts and posts still waiting, then the posts themselves |
-| Sources | `GET /api/datasources` | Collection writes rows. It does not analyse them. |
-| Sentiment | `GET /api/sentiment/timeline` | The bars are the text model. The reaction row is the audience tapping emoji. |
-| Audience | `GET /api/demographics` | A group sketch, and an hour chart counted from message time in IST. Say the number out loud if it is under 50. |
-| Trends | `GET /api/trends` | Extracted terms and a speed, on the message clock |
-| Network | `GET /api/network/graph` | A mark at 0.70 is a screen, not an accusation |
-| Ask | `POST /api/rag/query` | Point at the passages under the answer |
+| Overview | `GET /api/overview`, `GET /api/overview/posts` | Saved and waiting counts, then the posts |
+| Sources | `GET /api/datasources` | Where rows were collected. Collection does not analyse them. |
+| Sentiment | `GET /api/sentiment/timeline` | Text-model bars, and a separate reaction row |
+| Audience | `GET /api/demographics` | Group sketch, and a 24-hour chart from `posted_at` in IST |
+| Trends | `GET /api/trends` | Extracted terms, velocity, and acceleration |
+| Network | `GET /api/network/graph` | Directed interactions. A mark at 0.70 is the advisory screen. |
+| Ask | `POST /api/rag/query` | The answer and the passages under it |
 
-Overview does not wait for Component B. `GET /api/overview/posts` returns the newest saved posts whether or not they have been read. Each card is either a picture post or a text post. A picture post shows the saved photo. Opening a card shows the full caption, every photo, the reaction emoji with their counts, and the comments. A comment is a reply saved in the same chat, or a reply pulled from that post’s discussion thread. The card also shows the count and the first comment, so the thread is visible before the post is opened.
+`GET /api/overview/posts` returns the newest saved posts with or without a sentiment row. The page splits them into picture posts and text posts. Opening a card shows the channel, the message time, every saved photo, the full caption, the reaction emoji with counts, and the comments. The card itself shows the reaction chips, the comment count, and the first comment. A comment is a reply stored in the same chat, or a reply fetched from the post's discussion thread.
 
-Photos are served by `GET /api/media`. The file must be a JPEG, PNG, or WebP whose path stays inside `Telegram Desktop/`. That route is public, because an image tag cannot send the Basic Auth header. It does not list the folder and it does not serve any other file type.
+`GET /api/media` serves one JPEG, PNG, or WebP whose resolved path stays inside `Telegram Desktop/`. The route is public, because an `<img>` request carries no Basic Auth header. It does not list the directory, and it refuses every other suffix.
 
-`GET /api/health` is public, so a dead process can be seen without a password. Every other `/api` route expects HTTP Basic credentials when `API_BASIC_AUTH_PASSWORD` is set. The same username and password go in `frontend/.env` as `VITE_API_BASIC_AUTH_USERNAME` and `VITE_API_BASIC_AUTH_PASSWORD`.
+`GET /api/health` is public. Every other `/api` route expects HTTP Basic credentials when `API_BASIC_AUTH_PASSWORD` is set. The dashboard reads the same pair from `frontend/.env` as `VITE_API_BASIC_AUTH_USERNAME` and `VITE_API_BASIC_AUTH_PASSWORD`.
 
-The running routes are `/api/sentiment`, `/api/trends`, `/api/demographics`, `/api/network`, `/api/rag`, and `/api/datasources`. An earlier specification wrote those paths with the component letter attached. The implementation uses the shorter names above. Say so if a reviewer is holding the older note.
-
-There is no eighth page. Report export was cut. The briefs in `docs/review/` are documents for the team, produced from HTML, not a feature of the website.
+The running routes are `/api/sentiment`, `/api/trends`, `/api/demographics`, `/api/network`, `/api/rag`, and `/api/datasources`. An earlier specification attached the component letter to those paths. The implementation uses the shorter names. The dashboard has seven pages. Report export was removed from the product. The PDFs in `docs/review/` are team handouts, generated from HTML, and they are separate from the website.
 
 ## 12. Models and the 4 GB limit
 
-| Piece | Approximate weight | When it is loaded |
+| Piece | Approximate weight | When it is resident |
 | --- | --- | --- |
 | Sentiment model | 1.1 GB | First, then released |
 | Emotion model | 500 MB | Second, then released |
 | DistilBART stance | 260 MB | Third, then released |
-| MiniLM embeddings | 470 MB | Themes and Ask |
-| Ollama `llama3.2:3b`, 4-bit | 2.0 GB | Only while an offline answer is being written |
-| Postgres, Redis, API, website | about 2.5–3.5 GB of system RAM | While the demo is open |
+| MiniLM embeddings | 470 MB | Themes, and again for Ask |
+| Ollama `llama3.2:3b`, 4-bit | 2.0 GB | While an offline answer is being written |
+| Postgres, Redis, API, website | 2.5–3.5 GB system RAM | While the demo is open |
 
-Loading the transformers together exceeds 4 GB and kills the demo. The pipeline is a worker-level sequence, not one model instance per HTTP request. `DEVICE=cuda` is the reference setting. `DEVICE=cpu` is the fallback. The large BART stance model stays out of the running process.
+The three transformers together exceed 4 GB. The pipeline is one worker-level sequence: load, infer, unload, `empty_cache`. Models are process singletons, never one instance per HTTP request. `DEVICE=cuda` is the reference setting. `DEVICE=cpu` is the fallback. The 1.6 GB BART stance checkpoint stays out of the running process.
 
-Theme clustering also uses UMAP, HDBSCAN, and scikit-learn. The graph uses NetworkX. None of those is a trained classifier for this project.
+Theme clustering also uses UMAP, HDBSCAN, and scikit-learn. The graph uses NetworkX. None of those is a classifier trained for this project.
 
 ## 13. Configuration
 
-Copy `.env.example` to `.env`. The database defaults match `docker-compose.yml`.
+Copy `.env.example` to `.env`. The database defaults match `docker-compose.yml`: database `socmint`, user `postgres`, password `postgres`, port 5432.
 
 | Variable | Role |
 | --- | --- |
-| `DATABASE_URL`, `DATABASE_SYNC_URL` | Async and sync SQLAlchemy URLs. Default database `socmint` on port 5432. |
+| `DATABASE_URL`, `DATABASE_SYNC_URL` | Async and sync SQLAlchemy URLs |
 | `REDIS_URL`, `CELERY_BROKER_URL` | Redis on port 6379 |
-| `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE_NUMBER` | Live reader only. Obtained from the Telegram developer portal. Leave blank for the offline demo. |
+| `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `TELEGRAM_PHONE_NUMBER` | Live reader. Leave blank for the offline demo. |
 | `TELEGRAM_SESSION_NAME` | Session file name. Default `socmint_session`. The file is gitignored. |
 | `DEVICE` | `cuda` or `cpu` |
 | `SENTIMENT_MODEL`, `EMOTION_MODEL`, `STANCE_MODEL`, `EMBEDDING_MODEL` | The four locked checkpoints |
-| `LLM_PROVIDER`, `OLLAMA_MODEL` | Who writes Ask answers |
+| `LLM_PROVIDER`, `OLLAMA_MODEL` | Who writes Ask answers. `XAI_MODEL` when the provider is `xai`. |
 | `DEMO_B_BATCH_SIZE` | Review cap. Default 50. |
 | `BERTOPIC_MAX_DOCS` | Theme cap. Default 500. |
 | `STANCE_CONFIDENCE_THRESHOLD` | 0.60 |
-| `RAG_COSINE_CUTOFF` | 0.65 |
+| `RAG_COSINE_CUTOFF` | 0.65, applied as a cosine distance |
 | `CIB_ANOMALY_THRESHOLD` | 0.70 |
 | `MIN_CLUSTER_SIZE`, `DEMO_MIN_CLUSTER_SIZE` | 50 for the research line, 15 for a small demo card |
-| `API_BASIC_AUTH_USERNAME`, `API_BASIC_AUTH_PASSWORD` | Dashboard login. Empty password turns the check off for local development. |
+| `API_BASIC_AUTH_USERNAME`, `API_BASIC_AUTH_PASSWORD` | Dashboard login. An empty password disables the check for local development. |
 
-Do not commit `.env`, `frontend/.env`, `*.session`, or the `Telegram Desktop/` media folder.
+`.env`, `frontend/.env`, `*.session`, and `Telegram Desktop/` stay out of git.
 
 ## 14. How to run it
 
-From the project root in PowerShell.
+From the project root, in PowerShell.
 
-**Install.**
+**Install**
 
 ```powershell
 Copy-Item .env.example .env
@@ -306,7 +339,7 @@ pip install -r requirements.txt
 alembic upgrade head
 ```
 
-**Review path, no Telegram.**
+**Review path, with no Telegram account**
 
 ```powershell
 python -m ingestion_a.backfill --offline
@@ -325,16 +358,16 @@ Open [http://localhost:5173](http://localhost:5173). Interactive API documentati
 
 `scripts/start_system.ps1` checks that PostgreSQL is listening, aligns the seed into the active 48-hour window, and starts the API and the website in two further terminals.
 
-**Offline answers.**
+**Offline answers**
 
 ```powershell
 ollama serve
 ollama pull llama3.2:3b
 ```
 
-Set `LLM_PROVIDER=ollama`. If Ollama is not running, Ask still returns the retrieved extract.
+Set `LLM_PROVIDER=ollama`. When Ollama is down, Ask still returns the retrieved extract.
 
-**Optional live reader.**
+**Optional live reader**
 
 ```powershell
 python -m ingestion_a.download_latest
@@ -344,62 +377,68 @@ python -m ingestion_a.download_latest --comments
 python -m ingestion_a.import_exported --import-all-dirs "Telegram Desktop" --max-posts 80
 ```
 
-Only one live client may be open. A second process locks the session file.
-
-**After the exam.**
+**After the exam**
 
 ```powershell
 psql -U postgres -d socmint -f scripts/post_viva_scrub.sql
 ```
 
-## 15. A two-minute demonstration
+## 15. Demonstration
 
-1. Overview. Open one picture post and one text post. The reaction chips are the emoji under the post. The comments are replies, not a second analysis. The counts below are saved posts and posts still waiting to be read.
-2. Sources. Collection only stores.
-3. Sentiment. The bars are the wording. The reaction row is separate. Sarcasm warns. It does not flip the label.
-4. Audience. This is a sketch of the group. If the count is under 50, say that it is below the privacy line.
-5. Trends. This cluster is faster in the second half of the window. The words were extracted.
-6. Network. Lines are forwards, replies, and mentions. A mark at 0.70 does not name an operator.
-7. Ask. Use one prepared question and point at the passages under the answer.
+Stay on the seed when Telegram is unreachable. The review does not require the live account.
 
-If Telegram is unreachable in the room, stay on the seed. The review does not need the live account.
+1. **Overview.** Open one picture post and one text post. The reaction chips are the emoji counts stored with the message. The comments are replies under that message. The counts lower on the page are saved posts and posts still waiting for Component B.
+2. **Sources.** Show that collection writes rows and stops there.
+3. **Sentiment.** The bars are the text model. The reaction row is separate. The sarcasm flag lowers confidence and leaves the valence label as the model wrote it.
+4. **Audience.** Read the account count. Under 50, the card is below the privacy line. The hour bars are counted from `posted_at` in IST.
+5. **Trends.** A rising theme is faster in the second half of the window. The label is an extracted term list.
+6. **Network.** Lines are forwards, replies, and mentions. A mark at 0.70 is the advisory screen.
+7. **Ask.** Use one prepared question and show the passages under the answer. A question past the 0.65 distance cutoff stops.
 
-## 16. What is finished, and what is not
+## 16. Implementation status
 
-Finished for this review: the schema and migrations, the offline seed, export import, the live reader with photos, paged history, and flood-wait handling, the sequential reader, the reaction score, the audience guard and the IST hour chart, theme velocity, the three-signal graph, grounded Ask with a query log, Basic Auth, the seven pages, the overview post reader (picture lane, text lane, reactions, and comments), and the review briefs.
+**In the prototype**
 
-Not finished, and not to be claimed:
+- Schema, pgvector migration, offline seed, and desktop-export import
+- Live reader with photos, paged history, flood-wait resume, Middle East and Indian-defence selectors, and discussion comments for the newest posts
+- Sequential Component B, including the separate reaction score
+- Audience guard and the IST hour chart
+- Theme velocity, the three-signal graph, and grounded Ask with a query log
+- Basic Auth, seven dashboard pages, and the overview reader: picture lane, text lane, reactions, and comments
+- Review briefs in `docs/review/`
 
-- The Phase 5 comparison against a labelled coordination file. No precision, recall, or F1.
-- A statement that every pending post in the database has been read. Pending rows stay pending until B runs. A photograph with no caption stays pending, and it still appears on Overview.
-- A statement that the live pull has saved every matching channel, or the full history of every Middle East channel. The reader can be paused and resumed. Indian defence channels were taken at the 80-message cap.
+**Left for the report, and omitted from any accuracy claim**
+
+- Phase 5 against a labelled coordination file. Precision, recall, and F1 are unmeasured.
+- A full pass of Component B over every pending row. Empty captions stay `pending` and still appear on Overview.
+- A complete history of every matching channel. Middle East history can be resumed. Indian defence channels were taken at the 80-message cap.
 - Discussion comments for the whole archive. `--comments` covers the newest 48 posts, at most 25 replies each. A channel with no linked discussion contributes no thread.
-- A 15–25 second timing on CPU, or on a batch larger than 50 posts.
-- Validation of the age bands against a census. They are keyword hints.
+- The 15–25 second figure on a CPU, or on a batch larger than 50 posts.
+- Census validation of the age bands. They are keyword hints.
 
-## 17. Difficulties that changed the design
+## 17. Engineering record
 
-These are the problems worth explaining, because each one is visible in the code.
+Each row is a constraint that is visible in the code.
 
-| What happened | What the project does about it |
+| Constraint | Resolution in this build |
 | --- | --- |
-| All models together exceed 4 GB | One model is loaded, the batch finishes, the card is freed, and the next model loads |
-| The GPU is not always the device in use | The review button stays capped at 50 posts. The timing claim stays attached to the reference GPU |
-| Telegram flood waits | One client, a pause between chats, and a sleep for the exact wait Telegram returns |
-| The native Telegram cipher did not build on this Windows machine | Pyrofork falls back to its pure-Python cipher. Collection is slower. It still saves messages |
-| Two clients and one session file | Ingestion concurrency stays at 1 |
-| A review room without a stable network | The offline seed is the product. Live Telegram and an online writer are optional |
-| Decorative channel titles failed a keyword test | Titles are folded to plain letters before the subject check |
-| A short word matched an unrelated title | Blocked words are matched as whole words |
-| The same audience card appeared three times | The page keeps the newest snapshot of each label |
-| New downloads were missing on Sentiment | They stay pending until B runs, and the next run reads the newest message times first. Overview shows them immediately, with the photo |
-| An image tag cannot send the login header | `GET /api/media` is public, and it only serves an image file inside `Telegram Desktop/` |
-| Channel comments are not in the channel history | `--comments` reads the linked discussion and stores each reply under the parent post |
-| The audience hour chart was a fixed ratio | The 24 bars and the four parts of the day are counted from `posted_at` in IST |
-| Real groups were smaller than 50 accounts | The research line stays 50. A smaller demo card has to be described as below the line |
-| A language model will invent an answer from nothing | Search first. Distance beyond 0.65 aborts the question |
+| The transformers together exceed 4 GB | Load one model, finish the batch, free the card, then load the next |
+| The review machine may be on CPU | The button stays capped at 50 posts. The 15–25 second figure stays attached to the reference GPU |
+| Telegram flood waits | One client, a flush, then a sleep for the exact wait, then the same chat resumes |
+| The native Telegram cipher failed to build on this Windows machine | Pyrofork uses its pure-Python cipher. Collection is slower and still saves messages |
+| The session file is a single SQLite database | Ingestion concurrency stays at 1 |
+| The exam room may have no stable network | The offline seed is the demonstration. Live Telegram and an online writer are optional |
+| Decorative titles failed a keyword test | Titles are folded to plain letters before the subject check |
+| A short token matched an unrelated title | Blocked words match as whole words, and force-include is an exact folded title |
+| The same audience card appeared more than once | The page keeps the newest snapshot of each label |
+| New downloads were absent from Sentiment | They stay `pending` until B runs, newest `posted_at` first. Overview shows them at once, with the photo |
+| An image tag cannot send the login header | `GET /api/media` is public and serves only an image inside `Telegram Desktop/` |
+| Channel comments live in a linked discussion | `--comments` reads that thread and stores each reply under the parent post |
+| The audience hour chart had been a fixed ratio | The 24 bars and the four parts of the day are counted from `posted_at` in IST |
+| Real groups were smaller than 50 accounts | The research line stays at 50. A smaller demo card is marked below the line |
+| A language model will answer from an empty retrieval | Search first. Distance above 0.65 ends the question |
 
-## 18. Review briefs
+## 18. Documents
 
 The briefs are handouts. Regenerating them does not change the dashboard.
 
@@ -417,11 +456,26 @@ The briefs are handouts. Regenerating them does not change the dashboard.
 .\.venv\Scripts\python.exe docs\review\build_review_pdfs.py
 ```
 
-## 19. Specification documents
-
-These are the locked design notes. Where this README describes the running code, and an older note describes a route name or a frontend library that was not adopted, the running code is the one to demonstrate.
+The specification notes below are the locked design. Where this README describes the running routes or the libraries that were actually installed, the running code is the one to demonstrate.
 
 - [PROJECT_BRIEF.md](PROJECT_BRIEF.md) — scope, locked decisions, and the semester plan
 - [ARCHITECTURE.md](ARCHITECTURE.md) — components, tables, and numerical limits
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — week-by-week plan
-- [docs/EXECUTION_NEXT_STEPS.md](docs/EXECUTION_NEXT_STEPS.md) — what is still open before the exam
+- [docs/EXECUTION_NEXT_STEPS.md](docs/EXECUTION_NEXT_STEPS.md) — what remains open before the exam
+
+## 19. Repository map
+
+```text
+ingestion_a/     Component A. Seed, export import, live reader, subject filters.
+sentiment_b/     Component B. Sequential models, sarcasm rule, reaction score.
+demographic_c/   Component C. Aggregate sketch and the IST hour pattern.
+trend_d/         Component D. BERTopic and velocity.
+network_e/       Component E. Directed graph, Louvain, three-signal score.
+orchestrator/    Run analysis, and the optional Celery schedule.
+rag/             Embeddings, the 0.65 cutoff, and the answer writer.
+api/             FastAPI routes, Basic Auth, and the media file route.
+frontend/        The seven dashboard pages.
+storage/         SQLAlchemy models and Alembic migrations.
+docs/review/     Second-review briefs.
+scripts/         Windows launchers and the post-viva purge.
+```
