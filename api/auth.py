@@ -31,7 +31,7 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
             return True
         if any(path.startswith(prefix) for prefix in self._PUBLIC_PREFIXES):
             return True
-        if path == "/api/health":
+        if path == "/api/health" or path.startswith("/api/media"):
             return True
         return False
 

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from api.routers.overview import _photo_urls
 from api.schemas.models import ReactionSummary, SentimentTimelinePoint, SentimentTimelineResponse
 from sentiment_b.reactions import score_reactions
 from storage.database import SyncSessionLocal
@@ -165,7 +166,8 @@ def get_latest_sentiment_posts(
             "post_id": post.id,
             "channel_id": post.channel_id,
             "posted_at": post.posted_at.isoformat(),
-            "content_text": (post.content_text or "").strip()[:240],
+            "content_text": (post.content_text or "").strip()[:400],
+            "photos": _photo_urls(post.media_urls),
             "valence": s_res.valence,
             "dominant_emotion": s_res.dominant_emotion,
             "emotion_confidence": s_res.emotion_confidence,

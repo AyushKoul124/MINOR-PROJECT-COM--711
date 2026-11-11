@@ -9,8 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api.schemas.models import DemographicClusterItem, DemographicsResponse
+from demographic_c.pattern_analyzer import PatternAnalyzer
 from storage.database import SyncSessionLocal
 from storage.models.derived_c import DemographicAggregateC
+from storage.models.raw import MonitoredChannel, RawPost
 
 router = APIRouter(prefix="/demographics", tags=["Demographics & Privacy"])
 
@@ -39,6 +41,19 @@ def get_demographics(
     )
     clusters = db.execute(stmt).scalars().all()
 
+    names = {
+        row.identifier: row.display_name
+        for row in db.execute(select(MonitoredChannel)).scalars().all()
+    }
+
+    def readable_label(raw: str) -> str:
+        suffix = " Audience"
+        if raw.endswith(suffix):
+            key = raw[: -len(suffix)]
+            if key in names:
+                return names[key]
+        return raw
+
     items: list[DemographicClusterItem] = []
     suppressed_count = 0
     seen_labels: set[str] = set()
@@ -54,7 +69,7 @@ def get_demographics(
         items.append(
             DemographicClusterItem(
                 id=c.id,
-                cluster_label=c.cluster_label,
+                cluster_label=readable_label(c.cluster_label),
                 account_count=c.account_count,
                 below_threshold=c.below_threshold,
                 age_bracket_dist=c.age_bracket_dist or {},
@@ -66,12 +81,20 @@ def get_demographics(
             )
         )
 
-    # Coarse proxy diurnal rhythm representation
+    posted = db.execute(
+        select(RawPost.posted_at).where(RawPost.posted_at >= cutoff)
+    ).scalars().all()
+    rhythm = PatternAnalyzer().analyze_timestamps(list(posted))
+    phases = rhythm.phase_distribution
+    peak = rhythm.peak_hours_ist[0] if rhythm.peak_hours_ist else None
     diurnal_ist = {
-        "morning_ist_ratio": 0.32,
-        "afternoon_ist_ratio": 0.44,
-        "evening_ist_ratio": 0.24,
-        "peak_hour_ist": "14:00 - 18:00 IST",
+        "morning_ist_ratio": phases.get("Morning (06:00-12:00 IST)", 0.0),
+        "afternoon_ist_ratio": phases.get("Afternoon (12:00-18:00 IST)", 0.0),
+        "evening_ist_ratio": phases.get("Evening (18:00-23:00 IST)", 0.0),
+        "night_ist_ratio": phases.get("Night (23:00-06:00 IST)", 0.0),
+        "peak_hour_ist": f"{peak:02d}:00 IST" if peak is not None else "No posts in this window",
+        "hourly_counts": [rhythm.hourly_distribution_ist.get(hour, 0) for hour in range(24)],
+        "posts": rhythm.total_posts_analyzed,
     }
 
     return DemographicsResponse(

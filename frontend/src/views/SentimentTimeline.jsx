@@ -224,6 +224,9 @@ export default function SentimentTimeline() {
                   )}
                 </div>
               </div>
+              {p.photos?.[0] && (
+                <img src={p.photos[0]} alt="" className="post-inline-photo" />
+              )}
               <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-main)', lineHeight: '1.5' }}>
                 "{p.content_text}"
               </p>

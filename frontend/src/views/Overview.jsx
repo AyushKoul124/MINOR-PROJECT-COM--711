@@ -12,10 +12,12 @@ import {
   Users,
   Network
 } from 'lucide-react';
-import { fetchOverview, triggerVivaAnalysis } from '../api';
+import { fetchOverview, fetchRecentPosts, triggerVivaAnalysis } from '../api';
 
 export default function Overview({ onNavigate }) {
   const [metrics, setMetrics] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [openPost, setOpenPost] = useState(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState(null);
@@ -23,8 +25,17 @@ export default function Overview({ onNavigate }) {
 
   const loadData = async () => {
     try {
-      const ovData = await fetchOverview();
+      const [ovData, recent] = await Promise.all([
+        fetchOverview(),
+        fetchRecentPosts(48),
+      ]);
+      const nextPosts = recent.posts || [];
       setMetrics(ovData);
+      setPosts(nextPosts);
+      setOpenPost((current) => {
+        if (!current) return null;
+        return nextPosts.find((post) => post.post_id === current.post_id) || current;
+      });
     } catch (err) {
       console.error('Error fetching overview:', err);
     } finally {
@@ -37,6 +48,15 @@ export default function Overview({ onNavigate }) {
     const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!openPost) return undefined;
+    const onKey = (event) => {
+      if (event.key === 'Escape') setOpenPost(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [openPost]);
 
   const handleRunVivaAnalysis = async () => {
     setTriggering(true);
@@ -134,6 +154,20 @@ export default function Overview({ onNavigate }) {
           </span>
         </div>
       )}
+
+      <PostLane
+        title="Posts with a picture"
+        note="A photo, with the caption when the post has one."
+        posts={posts.filter((post) => post.kind === 'picture' || (post.photos || []).length > 0)}
+        onOpen={setOpenPost}
+      />
+      <PostLane
+        title="Text posts"
+        note="Words only. No picture was saved with these."
+        posts={posts.filter((post) => (post.photos || []).length === 0)}
+        onOpen={setOpenPost}
+      />
+      {openPost && <PostReader post={openPost} onClose={() => setOpenPost(null)} />}
 
       {/* Primary KPI Row */}
       <div className="bento-grid">
@@ -233,6 +267,126 @@ export default function Overview({ onNavigate }) {
           <p>Groups of accounts, and posts that move together.</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PostLane({ title, note, posts, onOpen }) {
+  return (
+    <div className="bento-card">
+      <div className="card-header">
+        <span className="card-title">{title}</span>
+        <span className="badge badge-gray">{posts.length}</span>
+      </div>
+      <p style={{ margin: '8px 0 0', color: 'var(--text-muted)', fontSize: '13px' }}>{note}</p>
+      {posts.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)' }}>Nothing in this group yet.</p>
+      ) : (
+        <div className="post-grid">
+          {posts.map((post) => (
+            <button key={post.post_id} type="button" className="post-card" onClick={() => onOpen(post)}>
+              {post.photos?.[0] && <img src={post.photos[0]} alt="" />}
+              <div className="post-card-body">
+                <div className="post-card-meta">
+                  <span>{post.channel}</span>
+                  <span>{new Date(post.posted_at).toLocaleString()}</span>
+                </div>
+                <p>{post.content_text || 'Photo only'}</p>
+                <ReactionRow reactions={post.reactions} />
+                <CommentPreview comments={post.comments} />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PostReader({ post, onClose }) {
+  return (
+    <div className="post-reader-backdrop" onClick={onClose}>
+      <article className="post-reader" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+        <div className="post-reader-top">
+          <div>
+            <strong>{post.channel}</strong>
+            <p>{new Date(post.posted_at).toLocaleString()}</p>
+          </div>
+          <button type="button" className="btn" onClick={onClose}>Close</button>
+        </div>
+        {(post.photos || []).map((src) => (
+          <img key={src} src={src} alt="" />
+        ))}
+        <p className="post-reader-body">{post.content_text || 'This post has a picture and no caption.'}</p>
+        <section className="post-reactions">
+          <h4>Reactions</h4>
+          {(post.reactions || []).length === 0 ? (
+            <p className="muted-line">No reactions on this post.</p>
+          ) : (
+            <ReactionRow reactions={post.reactions} />
+          )}
+        </section>
+        <section className="post-comments">
+          <h4>Comments ({commentTotal(post.comments)})</h4>
+          {(post.comments || []).length === 0 ? (
+            <p className="muted-line">No comments on this post.</p>
+          ) : (
+            post.comments.map((comment) => (
+              <CommentBlock key={comment.comment_id} comment={comment} />
+            ))
+          )}
+        </section>
+      </article>
+    </div>
+  );
+}
+
+function commentTotal(comments) {
+  return (comments || []).reduce(
+    (sum, comment) => sum + 1 + (comment.replies || []).length,
+    0,
+  );
+}
+
+function ReactionRow({ reactions }) {
+  if (!reactions?.length) return null;
+  return (
+    <div className="reaction-row">
+      {reactions.map((item) => (
+        <span key={`${item.emoji}-${item.count}`} className="reaction-chip">
+          {item.emoji} {item.count}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function CommentPreview({ comments }) {
+  const total = commentTotal(comments);
+  const first = (comments || []).find((comment) => comment.content_text) || comments?.[0];
+  return (
+    <div className="comment-preview">
+      <span>{total === 0 ? 'No comments' : `${total} comment${total === 1 ? '' : 's'}`}</span>
+      {first?.content_text && <p>{first.author}: {first.content_text}</p>}
+    </div>
+  );
+}
+
+function CommentBlock({ comment, nested = false }) {
+  return (
+    <div className={nested ? 'comment comment-reply' : 'comment'}>
+      <div className="comment-meta">
+        <strong>{comment.author}</strong>
+        <span>{new Date(comment.posted_at).toLocaleString()}</span>
+      </div>
+      {comment.content_text ? <p>{comment.content_text}</p> : null}
+      {(comment.photos || []).map((src) => (
+        <img key={src} src={src} alt="" />
+      ))}
+      <ReactionRow reactions={comment.reactions} />
+      {(comment.replies || []).map((reply) => (
+        <CommentBlock key={reply.comment_id} comment={reply} nested />
+      ))}
     </div>
   );
 }

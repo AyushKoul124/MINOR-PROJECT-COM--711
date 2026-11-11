@@ -51,6 +51,24 @@ _ME_TITLE = re.compile(
 )
 _NOT_MIDDLE_EAST = re.compile(r"north\s*east", re.I)
 
+# Named first when an Indian defence download is requested.
+_DEFENCE_PRIORITY = (
+    "hail indian army",
+    "indian army",
+    "defencesphere",
+    "defence sphere",
+    "defense sphere",
+    "defence squad",
+    "defense squad",
+    "ghatak",
+    "rashtriya rifles",
+)
+_DEFENCE_TITLE = re.compile(
+    r"\barmy\b|\bnavy\b|air force|defence|defense|military|\bghatak\b|\brifles\b|"
+    r"\bdrdo\b|brahmos|\bregiment\b",
+    re.I,
+)
+
 _RELATED_TAGS = {
     "geopolitics",
     "strategy",
@@ -132,6 +150,25 @@ def middle_east_rank(name: str) -> int:
         if key in title:
             return index
     return len(_ME_PRIORITY)
+
+
+def is_indian_defence(name: str) -> bool:
+    """True for Indian armed-forces and defence titles. Gore, academies, and jobs stay out."""
+    title = _fold(name)
+    if _BLOCK.search(title):
+        return False
+    if any(key in title for key in _DEFENCE_PRIORITY):
+        return True
+    return _DEFENCE_TITLE.search(title) is not None
+
+
+def indian_defence_rank(name: str) -> int:
+    """Lower numbers are downloaded first."""
+    title = _fold(name)
+    for index, key in enumerate(_DEFENCE_PRIORITY):
+        if key in title:
+            return index
+    return len(_DEFENCE_PRIORITY)
 
 
 def is_project_related(name: str) -> bool:

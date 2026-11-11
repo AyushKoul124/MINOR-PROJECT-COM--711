@@ -54,6 +54,10 @@ export async function fetchOverview() {
   return apiFetch('/overview');
 }
 
+export async function fetchRecentPosts(limit = 24) {
+  return apiFetch(`/overview/posts?limit=${limit}`);
+}
+
 export async function triggerVivaAnalysis(bBatchLimit = 50, windowHours = 48) {
   return apiFetch('/orchestrator/trigger', {
     method: 'POST',

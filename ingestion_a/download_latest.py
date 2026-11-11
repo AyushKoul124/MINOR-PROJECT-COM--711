@@ -23,12 +23,19 @@ from dotenv import load_dotenv
 from pyrogram import Client
 from pyrogram.enums import ChatType
 from pyrogram.errors import FloodWait
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from ingestion_a.import_exported import _ensure_monitored_channel, _slugify_channel_name
-from ingestion_a.topics import is_middle_east, is_project_related, middle_east_rank
+from ingestion_a.topics import (
+    indian_defence_rank,
+    is_indian_defence,
+    is_middle_east,
+    is_project_related,
+    middle_east_rank,
+)
 from storage.database import SyncSessionLocal
-from storage.models.raw import IngestionRun, RawPost
+from storage.models.raw import IngestionRun, RawAuthor, RawPost
 
 load_dotenv()
 
@@ -113,6 +120,43 @@ def _store(channel_id: str, channel_name: str, rows: list[dict]) -> tuple[int, i
     return len(rows), inserted
 
 
+def _public_name(message) -> tuple[str | None, str | None]:
+    """Public name on a comment. Phone numbers are never stored."""
+    user = message.from_user
+    if user is None:
+        return None, None
+    parts = [part for part in (user.first_name, user.last_name) if part]
+    name = " ".join(parts).strip() or (user.username or "").strip() or None
+    return str(user.id), name
+
+
+def _remember_author(session, author_id: str | None, display_name: str | None, run_id) -> None:
+    if not author_id or not display_name:
+        return
+    existing = session.execute(
+        select(RawAuthor.id).where(RawAuthor.platform_author_id == author_id).limit(1)
+    ).first()
+    if existing:
+        return
+    session.add(RawAuthor(
+        platform="telegram",
+        platform_author_id=author_id,
+        display_name=display_name,
+        snapshot_at=datetime.now(timezone.utc),
+        ingestion_run_id=run_id,
+    ))
+
+
+def _comment_row(channel_id: str, parent_message_id: int, message, photo_path: str | None) -> dict:
+    row = _row(channel_id, message, photo_path)
+    author_id, _name = _public_name(message)
+    row["platform_post_id"] = f"{channel_id}_comment_{message.id}"
+    row["reply_to_id"] = str(parent_message_id)
+    if author_id:
+        row["author_id"] = author_id
+    return row
+
+
 def _row(channel_id: str, message, photo_path: str | None) -> dict:
     text = message.text or message.caption or ""
     posted_at = message.date
@@ -166,7 +210,11 @@ async def _pull_chat(app: Client, chat, limit: int) -> None:
     while pulled < target:
         try:
             page = min(80, target - pulled)
+            page_count = 0
             async for message in app.get_chat_history(chat.id, limit=page, offset_id=offset_id):
+                page_count += 1
+                if message.id == offset_id:
+                    continue
                 offset_id = message.id
                 pulled += 1
                 if message.service:
@@ -182,7 +230,8 @@ async def _pull_chat(app: Client, chat, limit: int) -> None:
                     flush()
                 if pulled >= target:
                     break
-            break
+            if page_count < page or pulled >= target:
+                break
         except FloodWait as wait:
             flush()
             logger.warning("Flood wait %ss on %s", wait.value, title)
@@ -193,12 +242,104 @@ async def _pull_chat(app: Client, chat, limit: int) -> None:
     print(f"chat {title} | posts {seen} | photos {photos}", flush=True)
 
 
+def _save_names(names: list[tuple[str, str]]) -> None:
+    if not names:
+        return
+    session = SyncSessionLocal()
+    try:
+        for author_id, display_name in names:
+            _remember_author(session, author_id, display_name, None)
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
+
+async def _pull_thread(app, chat, channel_id: str, title: str, parent_id: int, folder: Path, limit: int, retried: bool = False) -> int:
+    """Save the discussion replies under one channel post."""
+    rows: list[dict] = []
+    names: list[tuple[str, str]] = []
+    try:
+        async for message in app.get_discussion_replies(chat.id, parent_id, limit=limit):
+            if getattr(message, "service", None) or message.id == parent_id:
+                continue
+            text = message.text or message.caption or ""
+            photo_path = await _download_photo(message, folder)
+            if not text and not photo_path:
+                continue
+            rows.append(_comment_row(channel_id, parent_id, message, photo_path))
+            author_id, name = _public_name(message)
+            if author_id and name:
+                names.append((author_id, name))
+    except FloodWait as wait:
+        print(f"wait {wait.value}s comments {title}", flush=True)
+        await asyncio.sleep(wait.value + 1)
+        if retried:
+            return 0
+        return await _pull_thread(app, chat, channel_id, title, parent_id, folder, limit, True)
+    except Exception as exc:
+        print(f"comments skip {title} {parent_id}: {type(exc).__name__}", flush=True)
+        return 0
+    if rows:
+        _store(channel_id, title, rows)
+        _save_names(names)
+    return len(rows)
+
+
+async def _pull_recent_comments(app, chats, post_limit: int = 48, per_post: int = 25) -> None:
+    """Attach discussion replies to the newest saved posts."""
+    by_slug = {}
+    titles = {}
+    for chat in chats:
+        title = chat.title or getattr(chat, "first_name", None) or str(chat.id)
+        slug = _slugify_channel_name(title)
+        by_slug[slug] = chat
+        titles[slug] = title
+    session = SyncSessionLocal()
+    try:
+        posts = session.execute(
+            select(RawPost.channel_id, RawPost.platform_post_id)
+            .where(~RawPost.platform_post_id.contains("_comment_"))
+            .order_by(RawPost.posted_at.desc(), RawPost.id.desc())
+            .limit(post_limit)
+        ).all()
+    finally:
+        session.close()
+    saved = 0
+    for channel_id, platform_post_id in posts:
+        chat = by_slug.get(channel_id)
+        tail = platform_post_id.rsplit("_", 1)[-1]
+        title = titles.get(channel_id, channel_id)
+        if chat is None or not tail.isdigit():
+            print(f"comments miss {title}", flush=True)
+            continue
+        folder = EXPORT_ROOT / _safe_dir(title)
+        folder.mkdir(parents=True, exist_ok=True)
+        count = await _pull_thread(app, chat, channel_id, title, int(tail), folder, per_post)
+        saved += count
+        print(f"comments {title} {tail} | {count}", flush=True)
+        await asyncio.sleep(1)
+    print(f"comments_done {saved}", flush=True)
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Download recent public Telegram posts and photos.")
     parser.add_argument(
         "--middle-east",
         action="store_true",
         help="Download Middle East chats first, including Mediterranean Man and Middle East Spectator, with no 80-message cap.",
+    )
+    parser.add_argument(
+        "--indian-defence",
+        action="store_true",
+        help="Download Indian defence chats, army and defence titles first. Gore and academies are skipped.",
+    )
+    parser.add_argument(
+        "--comments",
+        action="store_true",
+        help="Save discussion replies for the newest posts already in the database.",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -215,7 +356,11 @@ async def main() -> None:
                 continue
             if chat.type in KEEP_TYPES or (chat.type == ChatType.PRIVATE and is_project_related(name)):
                 chats.append(chat)
-        if args.middle_east:
+        if args.indian_defence:
+            chosen = [chat for chat in chats if is_indian_defence(chat.title or getattr(chat, "first_name", "") or "")]
+            chosen.sort(key=lambda chat: (indian_defence_rank(chat.title or ""), (chat.title or "").lower()))
+            print("order " + " | ".join(chat.title or "" for chat in chosen), flush=True)
+        elif args.middle_east:
             chosen = [chat for chat in chats if is_middle_east(chat.title or getattr(chat, "first_name", "") or "")]
             chosen.sort(key=lambda chat: (middle_east_rank(chat.title or ""), (chat.title or "").lower()))
             print("order " + " | ".join(chat.title or "" for chat in chosen), flush=True)
@@ -228,6 +373,10 @@ async def main() -> None:
                 else:
                     print(f"skip {name} | outside project scope", flush=True)
         print(f"chats {len(chosen)}", flush=True)
+        if args.comments:
+            await _pull_recent_comments(app, chosen)
+            print("download_done", flush=True)
+            return
         for chat in chosen:
             limit = 0 if args.middle_east else MAX_MESSAGES
             try:
