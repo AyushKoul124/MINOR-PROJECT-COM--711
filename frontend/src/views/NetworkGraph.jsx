@@ -1,22 +1,99 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Network, ShieldAlert, Activity, Users, Info, AlertTriangle } from 'lucide-react';
+import { Network, Activity, AlertTriangle } from 'lucide-react';
 import { fetchNetworkGraph } from '../api';
 
-const COMMUNITY_COLORS = [
-  '#3b82f6', // Blue
-  '#10b981', // Emerald
-  '#8b5cf6', // Purple
-  '#f59e0b', // Amber
-  '#06b6d4', // Cyan
-  '#ec4899', // Pink
-  '#14b8a6', // Teal
-];
+const INK = '#111111';
+const BLUE = '#1f4fff';
+const LIME = '#d6ff3f';
+const LINE = '#c5c5c5';
+
+function buildLayout(nodes, links, width, height) {
+  const coords = new Map();
+  const points = nodes.map((node, index) => {
+    const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2;
+    const ring = Math.min(width, height) * 0.3;
+    return {
+      x: width / 2 + Math.cos(angle) * ring,
+      y: height / 2 + Math.sin(angle) * ring * 0.72,
+      node,
+    };
+  });
+  const indexById = new Map(points.map((point, index) => [point.node.id, index]));
+  const edges = links
+    .map((link) => [indexById.get(link.source), indexById.get(link.target)])
+    .filter((pair) => pair[0] != null && pair[1] != null && pair[0] !== pair[1]);
+
+  for (let step = 0; step < 160; step += 1) {
+    const disp = points.map(() => ({ x: 0, y: 0 }));
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        let dx = points[i].x - points[j].x;
+        let dy = points[i].y - points[j].y;
+        const dist = Math.hypot(dx, dy) || 0.1;
+        const push = 520 / (dist * dist);
+        dx = (dx / dist) * push;
+        dy = (dy / dist) * push;
+        disp[i].x += dx;
+        disp[i].y += dy;
+        disp[j].x -= dx;
+        disp[j].y -= dy;
+      }
+    }
+    edges.forEach(([from, to]) => {
+      const dx = points[to].x - points[from].x;
+      const dy = points[to].y - points[from].y;
+      disp[from].x += dx * 0.045;
+      disp[from].y += dy * 0.045;
+      disp[to].x -= dx * 0.045;
+      disp[to].y -= dy * 0.045;
+    });
+    points.forEach((point, index) => {
+      disp[index].x += (width / 2 - point.x) * 0.012;
+      disp[index].y += (height / 2 - point.y) * 0.012;
+      point.x += Math.max(-14, Math.min(14, disp[index].x));
+      point.y += Math.max(-14, Math.min(14, disp[index].y));
+      point.x = Math.max(36, Math.min(width - 36, point.x));
+      point.y = Math.max(28, Math.min(height - 28, point.y));
+    });
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  points.forEach((point) => {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  });
+  const pad = 56;
+  const spanX = Math.max(maxX - minX, 1);
+  const spanY = Math.max(maxY - minY, 1);
+  const scale = Math.min((width - pad * 2) / spanX, (height - pad * 2) / spanY);
+  const offsetX = (width - spanX * scale) / 2;
+  const offsetY = (height - spanY * scale) / 2;
+  points.forEach((point) => {
+    const degree = point.node.degree || 0;
+    const flagged = point.node.coordination_signal;
+    coords.set(point.node.id, {
+      x: offsetX + (point.x - minX) * scale,
+      y: offsetY + (point.y - minY) * scale,
+      r: Math.max(flagged ? 7 : 5, Math.min(13, 5 + degree * 48)),
+      node: point.node,
+    });
+  });
+  return coords;
+}
 
 export default function NetworkGraph() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedNode, setSelectedNode] = useState(null);
+  const [width, setWidth] = useState(960);
   const canvasRef = useRef(null);
+  const frameRef = useRef(null);
+  const layoutRef = useRef(new Map());
 
   useEffect(() => {
     async function loadData() {
@@ -32,139 +109,119 @@ export default function NetworkGraph() {
     loadData();
   }, []);
 
-  // Simple, robust 60 FPS HTML5 Canvas network visualizer
   useEffect(() => {
-    if (!data || !canvasRef.current) return;
+    const frame = frameRef.current;
+    if (!frame) return undefined;
+    const measure = () => {
+      const next = frame.clientWidth;
+      if (next > 0) setWidth(next);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [loading]);
+
+  const nodes = data?.nodes || [];
+  const links = data?.links || [];
+  const linkedIds = new Set();
+  links.forEach((link) => {
+    linkedIds.add(link.source);
+    linkedIds.add(link.target);
+  });
+  const seen = new Set();
+  const drawnNodes = [];
+  nodes.forEach((node) => {
+    if (seen.has(node.id)) return;
+    seen.add(node.id);
+    if (linkedIds.has(node.id) || node.coordination_signal) drawnNodes.push(node);
+  });
+  const hiddenCount = seen.size - drawnNodes.length;
+
+  useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas || drawnNodes.length === 0) return undefined;
     const ctx = canvas.getContext('2d');
-    const width = canvas.width;
-    const height = canvas.height;
-
-    const nodes = data.nodes || [];
-    const links = data.links || [];
-    if (nodes.length === 0) return;
-
-    // Distribute nodes in community clusters across canvas
-    const nodeCoords = new Map();
-    const commCenters = new Map();
-    const commCount = Math.max(1, data.total_communities || 4);
-
-    for (let c = 0; c < commCount; c++) {
-      const angle = (c / commCount) * 2 * Math.PI;
-      const radius = Math.min(width, height) * 0.32;
-      commCenters.set(c, {
-        x: width / 2 + Math.cos(angle) * radius,
-        y: height / 2 + Math.sin(angle) * radius,
-      });
-    }
-
-    nodes.forEach((node, i) => {
-      const cCenter = commCenters.get(node.community_id % commCount) || { x: width / 2, y: height / 2 };
-      const jitterAngle = (i * 2.4);
-      const jitterRadius = 25 + (i % 8) * 14;
-      nodeCoords.set(node.id, {
-        x: cCenter.x + Math.cos(jitterAngle) * jitterRadius,
-        y: cCenter.y + Math.sin(jitterAngle) * jitterRadius,
-        data: node,
-      });
-    });
-
-    // Render loop
+    const height = 560;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(width * dpr);
+    canvas.height = Math.floor(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
 
-    // 1. Draw Links
-    links.forEach((l) => {
-      const src = nodeCoords.get(l.source);
-      const tgt = nodeCoords.get(l.target);
-      if (src && tgt) {
-        ctx.beginPath();
-        ctx.moveTo(src.x, src.y);
-        ctx.lineTo(tgt.x, tgt.y);
-        ctx.strokeStyle = l.type === 'forward' ? 'rgba(59, 130, 246, 0.25)' : 'rgba(100, 116, 139, 0.2)';
-        ctx.lineWidth = Math.min(3, 0.8 + (l.weight || 1) * 0.4);
-        ctx.stroke();
-      }
+    const coords = buildLayout(drawnNodes, links, width, height);
+    layoutRef.current = coords;
+
+    links.forEach((link) => {
+      const source = coords.get(link.source);
+      const target = coords.get(link.target);
+      if (!source || !target) return;
+      ctx.beginPath();
+      ctx.moveTo(source.x, source.y);
+      ctx.lineTo(target.x, target.y);
+      ctx.strokeStyle = LINE;
+      ctx.lineWidth = 1;
+      ctx.stroke();
     });
 
-    // 2. Draw Nodes
-    nodeCoords.forEach((n) => {
-      const isBroker = (n.data.betweenness || 0) > 0.05;
-      const isCIB = n.data.coordination_signal;
-      const radius = Math.max(4, Math.min(14, 5 + (n.data.betweenness || 0) * 35));
-      const color = COMMUNITY_COLORS[n.data.community_id % COMMUNITY_COLORS.length];
-
+    coords.forEach((entry) => {
+      const flagged = entry.node.coordination_signal;
+      const connector = (entry.node.betweenness || 0) >= 0.05 || (entry.node.degree || 0) >= 0.06;
       ctx.beginPath();
-      ctx.arc(n.x, n.y, radius, 0, 2 * Math.PI);
-      ctx.fillStyle = color;
+      ctx.arc(entry.x, entry.y, entry.r, 0, Math.PI * 2);
+      ctx.fillStyle = flagged ? LIME : connector ? BLUE : INK;
       ctx.fill();
-
-      // CIB Anomaly Highlighting
-      if (isCIB) {
-        ctx.strokeStyle = '#f43f5e';
-        ctx.lineWidth = 3;
-        ctx.stroke();
-
-        // Pulsing outer halo
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = INK;
+      ctx.stroke();
+      if (selectedNode && selectedNode.id === entry.node.id) {
         ctx.beginPath();
-        ctx.arc(n.x, n.y, radius + 4, 0, 2 * Math.PI);
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.4)';
+        ctx.arc(entry.x, entry.y, entry.r + 5, 0, Math.PI * 2);
+        ctx.strokeStyle = BLUE;
         ctx.lineWidth = 1.5;
         ctx.stroke();
-      } else if (isBroker) {
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 2;
-        ctx.stroke();
       }
     });
-  }, [data]);
 
-  const handleCanvasClick = (e) => {
-    if (!canvasRef.current || !data) return;
-    const rect = canvasRef.current.getBoundingClientRect();
-    const clickX = (e.clientX - rect.left) * (canvasRef.current.width / rect.width);
-    const clickY = (e.clientY - rect.top) * (canvasRef.current.height / rect.height);
+    return undefined;
+  }, [drawnNodes, links, width, selectedNode]);
 
-    // Hit test against nodes
-    const nodes = data.nodes || [];
-    const commCount = Math.max(1, data.total_communities || 4);
-    const width = canvasRef.current.width;
-    const height = canvasRef.current.height;
-
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i];
-      const angle = (node.community_id / commCount) * 2 * Math.PI;
-      const radius = Math.min(width, height) * 0.32;
-      const cx = width / 2 + Math.cos(angle) * radius;
-      const cy = height / 2 + Math.sin(angle) * radius;
-      const nx = cx + Math.cos(i * 2.4) * (25 + (i % 8) * 14);
-      const ny = cy + Math.sin(i * 2.4) * (25 + (i % 8) * 14);
-
-      const dist = Math.hypot(clickX - nx, clickY - ny);
-      if (dist <= 16) {
-        setSelectedNode(node);
-        return;
-      }
-    }
-    setSelectedNode(null);
+  const handleCanvasClick = (event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) * (width / rect.width);
+    const y = (event.clientY - rect.top) * (560 / rect.height);
+    let hit = null;
+    layoutRef.current.forEach((entry) => {
+      if (entry.marker) return;
+      if (Math.hypot(x - entry.x, y - entry.y) <= entry.r + 6) hit = entry.node;
+    });
+    setSelectedNode(hit);
   };
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-muted)' }}>
-        <Activity className="animate-spin" size={28} style={{ marginRight: '10px' }} />
+      <div className="loading-state">
+        <Activity className="animate-spin" size={28} />
         <span>Loading the network...</span>
       </div>
     );
   }
 
-  const nodes = data?.nodes || [];
-  const links = data?.links || [];
-  const flaggedNodes = nodes.filter((n) => n.coordination_signal);
-  const topBrokers = [...nodes].sort((a, b) => (b.betweenness || 0) - (a.betweenness || 0)).slice(0, 5);
+  const flaggedNodes = [];
+  const flaggedSeen = new Set();
+  nodes.forEach((node) => {
+    if (!node.coordination_signal || flaggedSeen.has(node.id)) return;
+    flaggedSeen.add(node.id);
+    flaggedNodes.push(node);
+  });
+  const topBrokers = [...drawnNodes].sort((a, b) => (b.betweenness || 0) - (a.betweenness || 0)).slice(0, 5);
 
   return (
     <div className="view-stack">
-      {/* Topology Telemetry Row */}
       <div className="bento-grid">
         <div className="bento-card span-3">
           <div className="card-header">
@@ -203,130 +260,77 @@ export default function NetworkGraph() {
         </div>
       </div>
 
-      {/* Main Canvas Graph Visualization */}
-      <div className="bento-card" style={{ padding: '0', position: 'relative' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="bento-card graph-card" ref={frameRef}>
+        <div className="card-header">
           <span className="card-title"><Network size={16} /> How accounts connect</span>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="badge badge-blue">Larger means more central</span>
-            <span className="badge badge-rose">Red ring = similar posting</span>
+          <div className="badge-row">
+            <span className="badge badge-blue">Blue marks a connector</span>
+            <span className="badge">Lime marks similar posting</span>
           </div>
         </div>
+        {drawnNodes.length === 0 ? (
+          <div className="empty-state">No links in this window.</div>
+        ) : (
+          <canvas ref={canvasRef} className="graph-canvas" onClick={handleCanvasClick} />
+        )}
+        {hiddenCount > 0 && (
+          <p className="graph-note">
+            {hiddenCount} accounts have no forward, mention, or reply in this window, so they are left off the drawing.
+          </p>
+        )}
 
-        <canvas
-          ref={canvasRef}
-          width={1000}
-          height={480}
-          style={{ width: '100%', height: '480px', display: 'block', background: '#f6f1e8', cursor: 'pointer' }}
-          onClick={handleCanvasClick}
-        />
-
-        {/* Selected Node Drawer */}
         {selectedNode && (
-          <div style={{
-            position: 'absolute',
-            bottom: '16px',
-            right: '16px',
-            width: '320px',
-            background: '#fffdf8',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '8px',
-            padding: '16px',
-            boxShadow: 'var(--shadow-lg)',
-            backdropFilter: 'blur(8px)',
-            fontSize: '13px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span style={{ fontWeight: 600, color: 'var(--accent-cyan)' }}>{selectedNode.label}</span>
-              <button 
-                onClick={() => setSelectedNode(null)} 
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '14px' }}
-              >
-                &times;
-              </button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontFamily: 'var(--font-mono)', fontSize: '11px' }}>
-              <div>Type: <span style={{ color: 'var(--text-main)' }}>{selectedNode.entity_type}</span></div>
-              <div>Community: <span style={{ color: 'var(--accent-blue)' }}>#{selectedNode.community_id}</span></div>
-              <div>Connector score: <span style={{ color: 'var(--text-main)' }}>{selectedNode.betweenness}</span></div>
-              <div>Direct links: <span style={{ color: 'var(--text-main)' }}>{selectedNode.degree}</span></div>
-              <div>
-                Similarity score: 
-                <span style={{ color: selectedNode.coordination_signal ? 'var(--accent-rose)' : '#34d399', fontWeight: 600 }}>
-                  {' '}{selectedNode.anomaly_score} ({selectedNode.coordination_signal ? 'FLAGGED' : 'NORMAL'})
-                </span>
-              </div>
+          <div className="graph-inspector">
+            <button type="button" onClick={() => setSelectedNode(null)} aria-label="Close account details">×</button>
+            <h3>{selectedNode.label}</h3>
+            <div><span>Type</span><span>{selectedNode.entity_type}</span></div>
+            <div><span>Group</span><span>{selectedNode.community_id}</span></div>
+            <div><span>Connector</span><span>{selectedNode.betweenness}</span></div>
+            <div><span>Links</span><span>{selectedNode.degree}</span></div>
+            <div>
+              <span>Similarity</span>
+              <span className={selectedNode.coordination_signal ? 'flagged' : ''}>
+                {selectedNode.anomaly_score} {selectedNode.coordination_signal ? 'FLAGGED' : 'CLEAR'}
+              </span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Structural Brokers & CIB Screening Ledger */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-        {/* Top Brokers */}
-        <div className="bento-card">
+      <div className="bento-grid">
+        <div className="bento-card span-6">
           <div className="card-header">
             <span className="card-title">Accounts that connect the most groups</span>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-            {topBrokers.map((n, i) => (
-              <div 
-                key={n.id} 
-                style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  padding: '10px 14px', 
-                  background: 'var(--bg-surface)', 
-                  borderRadius: '6px', 
-                  fontSize: '12px' 
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-blue)', fontWeight: 700 }}>#{i + 1}</span>
-                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{n.label}</span>
-                  <span className="badge badge-gray">{n.entity_type}</span>
+          <div className="stack-sm">
+            {topBrokers.map((node, index) => (
+              <div key={node.id} className="ledger-row">
+                <div>
+                  <span className="ledger-rank">#{index + 1}</span>
+                  <span>{node.label}</span>
+                  <span className="badge badge-gray">{node.entity_type}</span>
                 </div>
-                <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-cyan)' }}>
-                  {n.betweenness}
-                </span>
+                <span className="mono">{node.betweenness}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* CIB Flagged Entities */}
-        <div className="bento-card">
+        <div className="bento-card span-6">
           <div className="card-header">
             <span className="card-title">Flagged for similar posting</span>
           </div>
-
           {flaggedNodes.length === 0 ? (
-            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-              No accounts were flagged.
-            </div>
+            <div className="empty-state">No accounts were flagged.</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px' }}>
-              {flaggedNodes.map((n) => (
-                <div 
-                  key={n.id} 
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    padding: '10px 14px', 
-                    background: 'rgba(244, 63, 94, 0.1)', 
-                    border: '1px solid rgba(244, 63, 94, 0.25)', 
-                    borderRadius: '6px', 
-                    fontSize: '12px' 
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <AlertTriangle size={14} style={{ color: 'var(--accent-rose)' }} />
-                    <span style={{ fontWeight: 600, color: 'var(--accent-rose)' }}>{n.label}</span>
+            <div className="stack-sm">
+              {flaggedNodes.map((node) => (
+                <div key={node.id} className="ledger-row ledger-flag">
+                  <div>
+                    <AlertTriangle size={14} />
+                    <span>{node.label}</span>
                   </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-rose)', fontWeight: 700 }}>
-                    {n.anomaly_score}
-                  </span>
+                  <span className="mono">{node.anomaly_score}</span>
                 </div>
               ))}
             </div>
