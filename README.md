@@ -10,7 +10,7 @@
 
 An offline-first audience-analysis prototype for public Telegram posts. Five components save the posts, read each one, sketch the group, find themes, and draw the interaction graph. A seven-page dashboard shows the posts, the readings, and an Ask page that answers only from the system's own summaries.
 
-The National Technical Research Organisation published the problem statement. This repository is the student testbed for the viva. It is a research prototype. Phase 5 has not been scored, so this file quotes no accuracy percentage.
+The National Technical Research Organisation published the problem statement. This repository is the student testbed for the viva. It is a research prototype. Phase 5 scored two coordination signals on a labelled tweet file: at the 0.70 cutoff, precision is 1.00, recall is 0.04, and F1 is 0.0769. That number is an offline check. It is not a dashboard accuracy.
 
 The demonstration that has to work in the exam room is the offline seed and the local dashboard. Live Telegram and an online language model are optional.
 
@@ -335,7 +335,15 @@ These are the locked limits of the prototype. They are design choices, not measu
 | Graph cap | 500 nodes | Highest betweenness, induced edges |
 | VRAM discipline | one transformer at a time | 4 GB card |
 
-Phase 5, the comparison against a labelled coordination file, has not been run. Precision, recall, and F1 are unmeasured.
+Phase 5 compared the coordination screen with `all_tweets_hashed.csv`, the Kaggle information-operations table (`info_op` 1 = coordinated, 0 = organic). The file has 22,873,094 tweet rows and 4,427 organic plus 4,167 coordinated accounts. The score uses a fixed sample: seed 42, 400 accounts from each class, at most 25 tweets from each account. The reported score is the mean of posting synchrony and duplicate content. `age_volume_signal` is excluded because the file has no account-creation date.
+
+| Check at 0.70 | Precision | Recall | F1 | Flagged |
+| --- | --- | --- | --- | --- |
+| Mean of the two signals | 1.00 | 0.04 | 0.0769 | 16 coordinated, 0 organic |
+| Synchrony alone | 1.00 | 0.0475 | 0.0907 | 19 coordinated, 0 organic |
+| Duplicate content alone | 0.8019 | 0.2125 | 0.3360 | 85 coordinated, 21 organic |
+
+A flag at 0.70 was right whenever it fired, and it fired for 16 of the 400 coordinated accounts in the sample. Lower cutoffs on the same sample trade that precision away for more of the coordinated class. At 0.50, precision is 0.9388, recall is 0.23, and F1 is 0.3695. The full curve is in `benchmarks/cib_ioa/results.json`. The tweets are from a Twitter / Russian-operation collection. The live system reads Telegram. These figures are indicative.
 
 Also still open: a full pass of Component B over every pending row, the complete history of every Middle East channel, discussion comments beyond the newest 48 posts, and the 15–25 second figure on CPU or on a batch larger than 50.
 
@@ -355,6 +363,7 @@ MINOR-PROJECT-COM--711/
 ├── demographic_c/                  # C  audience sketch, IST hours
 ├── trend_d/                        # D  BERTopic, velocity
 ├── network_e/                      # E  graph, Louvain, three-signal score
+├── benchmarks/cib_ioa/             # Offline precision, recall, and F1
 ├── orchestrator/                   # Run analysis, optional Celery beat
 ├── rag/                            # MiniLM search, 0.65 cutoff, answer writer
 │

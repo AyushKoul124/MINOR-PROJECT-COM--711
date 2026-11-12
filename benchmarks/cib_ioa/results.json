@@ -1,0 +1,265 @@
+{
+  "dataset": "all_tweets_hashed.csv",
+  "seed": 42,
+  "users_per_class_cap": 400,
+  "tweets_per_user_cap": 25,
+  "accounts": 800,
+  "organic": 400,
+  "coordinated": 400,
+  "mean_tweets_organic": 25.0,
+  "mean_tweets_coordinated": 22.92,
+  "signals": [
+    "posting_synchrony_signal",
+    "duplicate_content_signal"
+  ],
+  "excluded_signal": "age_volume_signal",
+  "excluded_reason": "The file has no account creation date.",
+  "score": "(posting_synchrony_signal + duplicate_content_signal) / 2",
+  "flag_threshold": 0.7,
+  "synchrony_window_seconds": 120.0,
+  "duplicate_similarity_cutoff": 0.75,
+  "at_0_70": {
+    "precision": 1.0,
+    "recall": 0.04,
+    "f1": 0.0769,
+    "true_negative": 400,
+    "false_positive": 0,
+    "false_negative": 384,
+    "true_positive": 16,
+    "threshold": 0.7
+  },
+  "synchrony_only_at_0_70": {
+    "precision": 1.0,
+    "recall": 0.0475,
+    "f1": 0.0907,
+    "true_negative": 400,
+    "false_positive": 0,
+    "false_negative": 381,
+    "true_positive": 19
+  },
+  "duplicate_only_at_0_70": {
+    "precision": 0.8019,
+    "recall": 0.2125,
+    "f1": 0.336,
+    "true_negative": 379,
+    "false_positive": 21,
+    "false_negative": 315,
+    "true_positive": 85
+  },
+  "threshold_curve": [
+    {
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1": 0.6667,
+      "true_negative": 0,
+      "false_positive": 400,
+      "false_negative": 0,
+      "true_positive": 400,
+      "threshold": 0.0
+    },
+    {
+      "precision": 0.4106,
+      "recall": 0.695,
+      "f1": 0.5162,
+      "true_negative": 1,
+      "false_positive": 399,
+      "false_negative": 122,
+      "true_positive": 278,
+      "threshold": 0.05
+    },
+    {
+      "precision": 0.3955,
+      "recall": 0.6525,
+      "f1": 0.4925,
+      "true_negative": 1,
+      "false_positive": 399,
+      "false_negative": 139,
+      "true_positive": 261,
+      "threshold": 0.1
+    },
+    {
+      "precision": 0.3886,
+      "recall": 0.6325,
+      "f1": 0.4814,
+      "true_negative": 2,
+      "false_positive": 398,
+      "false_negative": 147,
+      "true_positive": 253,
+      "threshold": 0.15
+    },
+    {
+      "precision": 0.3808,
+      "recall": 0.595,
+      "f1": 0.4644,
+      "true_negative": 13,
+      "false_positive": 387,
+      "false_negative": 162,
+      "true_positive": 238,
+      "threshold": 0.2
+    },
+    {
+      "precision": 0.3912,
+      "recall": 0.5575,
+      "f1": 0.4598,
+      "true_negative": 53,
+      "false_positive": 347,
+      "false_negative": 177,
+      "true_positive": 223,
+      "threshold": 0.25
+    },
+    {
+      "precision": 0.4298,
+      "recall": 0.4825,
+      "f1": 0.4547,
+      "true_negative": 144,
+      "false_positive": 256,
+      "false_negative": 207,
+      "true_positive": 193,
+      "threshold": 0.3
+    },
+    {
+      "precision": 0.5124,
+      "recall": 0.4125,
+      "f1": 0.4571,
+      "true_negative": 243,
+      "false_positive": 157,
+      "false_negative": 235,
+      "true_positive": 165,
+      "threshold": 0.35
+    },
+    {
+      "precision": 0.6351,
+      "recall": 0.3525,
+      "f1": 0.4534,
+      "true_negative": 319,
+      "false_positive": 81,
+      "false_negative": 259,
+      "true_positive": 141,
+      "threshold": 0.4
+    },
+    {
+      "precision": 0.7945,
+      "recall": 0.29,
+      "f1": 0.4249,
+      "true_negative": 370,
+      "false_positive": 30,
+      "false_negative": 284,
+      "true_positive": 116,
+      "threshold": 0.45
+    },
+    {
+      "precision": 0.9388,
+      "recall": 0.23,
+      "f1": 0.3695,
+      "true_negative": 394,
+      "false_positive": 6,
+      "false_negative": 308,
+      "true_positive": 92,
+      "threshold": 0.5
+    },
+    {
+      "precision": 0.9821,
+      "recall": 0.1375,
+      "f1": 0.2412,
+      "true_negative": 399,
+      "false_positive": 1,
+      "false_negative": 345,
+      "true_positive": 55,
+      "threshold": 0.55
+    },
+    {
+      "precision": 0.9714,
+      "recall": 0.085,
+      "f1": 0.1563,
+      "true_negative": 399,
+      "false_positive": 1,
+      "false_negative": 366,
+      "true_positive": 34,
+      "threshold": 0.6
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.065,
+      "f1": 0.1221,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 374,
+      "true_positive": 26,
+      "threshold": 0.65
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.04,
+      "f1": 0.0769,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 384,
+      "true_positive": 16,
+      "threshold": 0.7
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.02,
+      "f1": 0.0392,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 392,
+      "true_positive": 8,
+      "threshold": 0.75
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.0125,
+      "f1": 0.0247,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 395,
+      "true_positive": 5,
+      "threshold": 0.8
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.01,
+      "f1": 0.0198,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 396,
+      "true_positive": 4,
+      "threshold": 0.85
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.005,
+      "f1": 0.01,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 398,
+      "true_positive": 2,
+      "threshold": 0.9
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.005,
+      "f1": 0.01,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 398,
+      "true_positive": 2,
+      "threshold": 0.95
+    },
+    {
+      "precision": 1.0,
+      "recall": 0.0025,
+      "f1": 0.005,
+      "true_negative": 400,
+      "false_positive": 0,
+      "false_negative": 399,
+      "true_positive": 1,
+      "threshold": 1.0
+    }
+  ],
+  "accounts_seen": {
+    "organic": 4427,
+    "coordinated": 4167
+  }
+}
